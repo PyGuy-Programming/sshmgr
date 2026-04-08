@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-host_path='~/.local/bin/sshmgr/known_hosts.save'
+host_path=$HOME/.local/bin/sshmgr/known_hosts.save
 
 
 case "$1" in
