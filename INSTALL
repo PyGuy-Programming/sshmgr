@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+echo "checking if fzf and nano are installed..."
+if command -v fzf &>/dev/null && command -v nano &>/dev/null; then
+    echo "fzf and nano are installed! proceeding with installation.. "
+
+    # creating directory for the ssh manager
+    echo "creating directory for the ssh manager in $HOME/.local/bin/sshmgr ..."
+    mkdir "$HOME/.local/bin"
+    mkdir "$HOME/.local/bin/sshmgr"
+	
+    # creating file for saving known hosts
+    echo "creating file for saving known hosts..."
+    echo "this file can be edited later with sshmgr -e or sshmgr --edit"
+
+    touch "$HOME/.local/bin/sshmgr/known_hosts.save"
+    echo "# list of known hosts" >> "$HOME/.local/bin/sshmgr/known_hosts.save"
+    echo "# layout: <username>@<address> - <connection name>" >> "$HOME/.local/bin/sshmgr/known_hosts.save"
+    echo "   " >> "$HOME/.local/bin/sshmgr/known_hosts.save"
+
+    # adding alias to .bashrc in home directory
+    echo "alias sshmgr='bash $HOME/.local/bin/sshmgr/sshmgr.sh'" >> "$HOME/.bashrc"
+
+    echo "Installation complete!"
+    echo "You can now remove the cloned directory."
+
+    exit
+
+else
+    echo "fzf and/or nano are NOT installed. Please install fzf AND nano!"
+    exit 1
+fi
