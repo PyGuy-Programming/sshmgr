@@ -1,44 +1,44 @@
 #!/bin/bash
 set -e
 
-IS_INSTALLED_FILE="$HOME/.local/bin/sshmgr/is_installed"
+IS_INSTALLED_FILE="$HOME/.config/sshmgr/is_installed"
 
 if [ -f "$IS_INSTALLED_FILE" ]; then
-	echo "sshmgr is already installed! Have fun!"    
-	
+  echo "sshmgr is already installed! Have fun!"
+
 else
-	echo "checking if fzf and nano are installed..."
-	    if command -v fzf &>/dev/null && command -v nano &>/dev/null; then
-	        echo "fzf and nano are installed! proceeding with installation.. "
-	
-	        # creating directory for the ssh manager
-	        echo "creating directory for the ssh manager in $HOME/.local/bin/sshmgr ..."
-	        mkdir -p "$HOME/.local/bin"
-	        mkdir -p "$HOME/.local/bin/sshmgr"
-			touch "$HOME/.local/bin/sshmgr/is_installed"
-	
-	        # moving sshmgr.sh to $HOME/.local/bin/sshmgr/
-	        echo "moving sshmgr.sh to $HOME/.local/bin/sshmgr/ ..."
-	        cp sshmgr.sh $HOME/.local/bin/sshmgr/
-	
-	        # creating file for saving known hosts
-	        echo "creating file for saving known hosts..."
-	        echo "this file can be edited later with sshmgr -e or sshmgr --edit"
-	
-	        touch "$HOME/.local/bin/sshmgr/known_hosts.save"
-	        echo "# list of known hosts" >> "$HOME/.local/bin/sshmgr/known_hosts.save"
-	        echo "# layout: <username>@<address> - <connection name>" >> "$HOME/.local/bin/sshmgr/known_hosts.save"
-	        echo "   " >> "$HOME/.local/bin/sshmgr/known_hosts.save"
-	
-	        # adding alias to .bashrc in home directory
-	        echo "alias sshmgr='bash $HOME/.local/bin/sshmgr/sshmgr.sh'" >> "$HOME/.bashrc"
-	
-	        echo "Installation complete!"
-	        echo "You can now remove the cloned directory."
-	        echo "note that you need to reopen the terminal to apply"
-	
-	    else
-	        echo "fzf and/or nano are NOT installed. Please install fzf AND nano!"
-	        exit 1
-	    fi
+  echo "checking if fzf and nano are installed..."
+  if command -v fzf &>/dev/null && command -v nano &>/dev/null; then
+    echo "fzf and nano are installed! proceeding with installation.. "
+
+    # creating directory for the ssh manager
+    echo "creating directory for the ssh manager in $HOME/.config/sshmgr ..."
+    mkdir -p "$HOME/.config/sshmgr"
+    touch "$HOME/.config/sshmgr/is_installed"
+
+    # moving sshmgr.sh to $HOME/.local/bin/sshmgr/
+    echo "moving sshmgr.sh to $HOME/.local/bin/sshmgr/ ..."
+    mkdir -p "$HOME/.local/bin/sshmgr"
+    cp sshmgr.sh $HOME/.local/bin/sshmgr/
+
+    # creating file for saving known hosts
+    echo "creating file for saving known hosts..."
+    echo "this file can be edited later with sshmgr -e or sshmgr --edit"
+
+    touch "$HOME/.config/sshmgr/known_hosts.save"
+    echo "# list of known hosts" >>"$HOME/.config/sshmgr/known_hosts.save"
+    echo "# layout: <username>@<address> - <connection name>" >>"$HOME/.config/sshmgr/known_hosts.save"
+    echo "   " >>"$HOME/.config/sshmgr/known_hosts.save"
+
+    # adding alias to .bashrc in home directory
+    echo "alias sshmgr='bash $HOME/.local/bin/sshmgr/sshmgr.sh'" >>"$HOME/.bashrc"
+
+    echo "Installation complete!"
+    echo "You can now remove the cloned directory."
+    echo "note that you need to reopen the terminal to apply"
+
+  else
+    echo "fzf and/or nano are NOT installed. Please install fzf AND nano!"
+    exit 1
+  fi
 fi
