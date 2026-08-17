@@ -1,0 +1,6 @@
+{
+  "hosts": [
+    {"name": "intel-NUC (LAN)", "host": "192.168.178.60", "user": "root", "port": "22"},
+    {"name": "intel-NUC (tailscale)", "host": "100.89.254.126", "user": "root", "port": "22"}
+  ]
+}

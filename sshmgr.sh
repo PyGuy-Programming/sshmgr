@@ -1,43 +1,43 @@
 #!/bin/bash
 
-HOSTS_FILE="${SSHMGR_HOSTS:-$HOME/.config/sshmgr/known_hosts.save}"
+HOSTS_FILE="$HOME/.config/sshmgr/known_hosts.json"
+
+[ ! -f "$HOSTS_FILE" ] && {
+  echo "hosts file not found"
+  exit 1
+}
+jq -e '.hosts' "$HOSTS_FILE" >/dev/null 2>&1 || {
+  echo "invalid json"
+  exit 1
+}
 
 case "$1" in
 -e | --edit)
   # wird ausgeführt wenn $1 "-e" oder "--edit" ist
   echo "opening known hosts file with nano..."
-  nano "$HOSTS_FILE"
-  ;; # <-- das ist wie "break" in Python
--u | --uninstall)
-  echo "uninstalling sshmgr..."
-
-  echo "removing directory $HOME/.local/bin/sshmgr..."
-  rm -rf "$HOME/.local/bin/sshmgr"
-
-  echo "removing config directory $HOME/.config/sshmgr..."
-  rm -rf "$HOME/.config/sshmgr"
-
-  echo "removing alias from .bashrc file in home directory..."
-  sed -i '/alias sshmgr/d' $HOME/.bashrc
-  echo "note that you need to reopen the terminal to apply"
+  $EDITOR "$HOSTS_FILE"
   ;;
 -h | --help)
-  echo -e "Usage:\n \nsshmgr | opens host selection. exit py pressing CTRL+Q\n \nsshmgr -e / sshmgr --edit | opens the known hosts file with nano for you to edit it\n \nsshmgr -u / sshmgr --uninstall | uninstalls sshmgr (needs to be ran with sudo)\n \nsshmgr -h / sshmgr --help | shows this text for help"
+  # printing help/usage information
+  echo -e "Usage:\n \nsshmgr | opens host selection. exit py pressing CTRL+Q\n \nsshmgr -e / sshmgr --edit | opens the known hosts file with standart editor for you to edit it\n \nsshmgr -h / sshmgr --help | shows this text for help"
   ;;
 "")
+  # starting selcetion of known hosts if no option is given
   echo "opening known host selection..."
-  selected=$(grep -v '^\s*#\|^\s*$' "$HOSTS_FILE" | fzf --prompt="SSH > ")
+  selected=$(jq -r '.hosts[] | "\(.name)"' "$HOSTS_FILE" | fzf --prompt="SSH > ")
 
   [[ -z "$selected" ]] && exit 0
 
-  user_ip="${selected%% - *}"
-  name="${selected#* - }"
+  host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host' $HOSTS_FILE)
+  user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user' $HOSTS_FILE)
+  port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port' $HOSTS_FILE)
 
-  echo "Verbinde mit $name ($user_ip)..."
-  ssh "$user_ip"
+  # try conecting to the selected host
+  echo "Verbinde mit $selected ($user@$host)..."
+  ssh -p "$port" "$user@$host"
   ;;
 *)
-  # der "default" Fall — unbekanntes Argument
+  # printing help if given unknown option
   echo -e "unknown option: $1\nrun sshmgr -h for available options"
   ;;
-esac # <-- "case" rückwärts geschrieben, so endet der Block
+esac
