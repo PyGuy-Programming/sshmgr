@@ -2,10 +2,17 @@
 
 HOSTS_FILE="$HOME/.config/sshmgr/known_hosts.json"
 
-[ ! -f "$HOSTS_FILE" ] && {
-  echo "hosts file not found"
-  exit 1
+if [ ! -f "$HOSTS_FILE" ]; then
+  mkdir -p "$(dirname "$HOSTS_FILE")"
+  cat << 'DEFAULT' > "$HOSTS_FILE"
+{
+  "hosts": []
 }
+DEFAULT
+  echo "created empty hosts file at $HOSTS_FILE"
+  echo "add your hosts there and run sshmgr again"
+  exit 0
+fi
 jq -e '.hosts' "$HOSTS_FILE" >/dev/null 2>&1 || {
   echo "invalid json"
   exit 1
