@@ -4,7 +4,7 @@ HOSTS_FILE="$HOME/.config/sshmgr/known_hosts.json"
 
 if [ ! -f "$HOSTS_FILE" ]; then
   mkdir -p "$(dirname "$HOSTS_FILE")"
-  cat << 'DEFAULT' > "$HOSTS_FILE"
+  cat <<'DEFAULT' >"$HOSTS_FILE"
 {
   "hosts": []
 }
@@ -38,10 +38,16 @@ case "$1" in
   host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host' $HOSTS_FILE)
   user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user' $HOSTS_FILE)
   port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port' $HOSTS_FILE)
+  jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost' $HOSTS_FILE)
 
   # try conecting to the selected host
-  echo "Verbinde mit $selected ($user@$host)..."
-  ssh -p "$port" "$user@$host"
+  if [ -z "$jumphost" ]; then
+    echo "Conecting to $selected ($user@$host)..."
+    ssh -p "$port" "$user@$host"
+  else
+    echo "Connecting to $selected ($user@$host) using $jumphost as jumphost"
+    ssh -pJ "$port" "$jumphost" "$user@$host"
+  fi
   ;;
 *)
   # printing help if given unknown option
