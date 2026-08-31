@@ -2,7 +2,7 @@
 [![Description](https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&duration=3000&color=80B1CD&center=true&multiline=true&repeat=false&width=540&height=100&lines=A+simple+tool+writen+in+bash+to+make++;connecting+to+servers+much+easier+and+faster;(actively+working+on+it+btw))](https://git.io/typing-svg)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/pyguy-programming/sshmgr)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/pyguy-programming/sshmgr)
 
 A simple tool written in bash to make connecting to servers much easier and faster.
 
