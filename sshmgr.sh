@@ -20,14 +20,14 @@ jq -e '.hosts' "$HOSTS_FILE" >/dev/null 2>&1 || {
 
 case "$1" in
 -e | --edit)
-  # wird ausgeführt wenn $1 "-e" oder "--edit" ist
+# runs when $1 is "-e" or "--edit"
   echo "opening known hosts file with nano..."
   $EDITOR "$HOSTS_FILE"
   ;;
 -p | --ping)
   # ping all known hosts in parallel with fping
   echo "checking all hosts..."
-  # bewusst unquoted: Worttrennung ist hier gewollt (Hosts enthalten keine Leerzeichen)
+  # intentionally unquoted: word splitting is wanted here (host addresses contain no spaces)
   fping $(jq -r '.hosts[].host' "$HOSTS_FILE") 2>&1
   ;;
 -h | --help)
@@ -35,8 +35,8 @@ case "$1" in
   echo -e "Usage:\n \nsshmgr | opens host selection. exit py pressing CTRL+Q\n \nsshmgr -e / sshmgr --edit | opens the known hosts file with standart editor for you to edit it\n \nsshmgr -p / sshmgr --ping | pings all known hosts in parallel\n \nsshmgr -h / sshmgr --help | shows this text for help"
   ;;
 "")
-  # starting selcetion of known hosts if no option is given
-  # preview ruft dieses script selbst mit __info auf (siehe case unten)
+  # starting selection of known hosts if no option is given
+  # the fzf preview calls this script itself with __info (see case below)
   echo "opening known host selection..."
   selected=$(jq -r '.hosts[] | "\(.name)"' "$HOSTS_FILE" |
     fzf --prompt="SSH > " --preview="\"$0\" __info {}")
@@ -48,7 +48,7 @@ case "$1" in
   port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port' $HOSTS_FILE)
   jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost' $HOSTS_FILE)
 
-  # try conecting to the selected host
+  # try connecting to the selected host
   if [ -z "$jumphost" ]; then
     echo "Conecting to $selected ($user@$host)..."
     ssh -p "$port" "$user@$host"
@@ -58,7 +58,7 @@ case "$1" in
   fi
   ;;
 __info)
-  # internal: wird von der fzf preview aufgerufen, zeigt status + details
+  # internal: called by the fzf preview, shows status + details
   info_host=$(jq -r --arg name "$2" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
 
   if command -v fping >/dev/null 2>&1; then
