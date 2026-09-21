@@ -1,44 +1,66 @@
 #!/bin/bash
 set -e
 
+cd "$(dirname "$0")"
+
 IS_INSTALLED_FILE="$HOME/.config/sshmgr/is_installed"
 
 if [ -f "$IS_INSTALLED_FILE" ]; then
   echo "sshmgr is already installed! Have fun!"
-
-else
-  echo "checking if fzf and nano are installed..."
-  if command -v fzf &>/dev/null && command -v nano &>/dev/null; then
-    echo "fzf and nano are installed! proceeding with installation.. "
-
-    # creating directory for the ssh manager
-    echo "creating directory for the ssh manager in $HOME/.config/sshmgr ..."
-    mkdir -p "$HOME/.config/sshmgr"
-    touch "$HOME/.config/sshmgr/is_installed"
-
-    # moving sshmgr.sh to $HOME/.local/bin/sshmgr/
-    echo "moving sshmgr.sh to $HOME/.local/bin/sshmgr/ ..."
-    mkdir -p "$HOME/.local/bin/sshmgr"
-    cp sshmgr.sh $HOME/.local/bin/sshmgr/
-
-    # creating file for saving known hosts
-    echo "creating file for saving known hosts..."
-    echo "this file can be edited later with sshmgr -e or sshmgr --edit"
-
-    touch "$HOME/.config/sshmgr/known_hosts.save"
-    echo "# list of known hosts" >>"$HOME/.config/sshmgr/known_hosts.save"
-    echo "# layout: <username>@<address> - <connection name>" >>"$HOME/.config/sshmgr/known_hosts.save"
-    echo "   " >>"$HOME/.config/sshmgr/known_hosts.save"
-
-    # adding alias to .bashrc in home directory
-    echo "alias sshmgr='bash $HOME/.local/bin/sshmgr/sshmgr.sh'" >>"$HOME/.bashrc"
-
-    echo "Installation complete!"
-    echo "You can now remove the cloned directory."
-    echo "note that you need to reopen the terminal to apply"
-
-  else
-    echo "fzf and/or nano are NOT installed. Please install fzf AND nano!"
-    exit 1
-  fi
+  exit 0
 fi
+
+echo "checking dependencies..."
+
+missing=""
+for cmd in fzf jq; do
+  if ! command -v "$cmd" &>/dev/null; then
+    missing="$missing $cmd"
+  fi
+done
+
+if [ -n "$missing" ]; then
+  echo "missing required dependencies:$missing"
+  echo "install them first, e.g.:"
+  echo "  macOS:         brew install fzf jq fping"
+  echo "  Debian/Ubuntu: sudo apt-get install fzf jq fping"
+  exit 1
+fi
+echo "required dependencies (fzf, jq) found."
+
+if ! command -v fping &>/dev/null; then
+  echo "warning: fping is not installed - 'sshmgr -p' and the online status preview will not work."
+fi
+
+if [ -z "$EDITOR" ]; then
+  echo "warning: \$EDITOR is not set - 'sshmgr -e' needs it (e.g. export EDITOR=nano)."
+fi
+
+# creating config directory and empty hosts file
+echo "creating config directory in $HOME/.config/sshmgr ..."
+mkdir -p "$HOME/.config/sshmgr"
+
+if [ ! -f "$HOME/.config/sshmgr/known_hosts.json" ]; then
+  echo "creating empty hosts file..."
+  printf '{\n  "hosts": []\n}\n' >"$HOME/.config/sshmgr/known_hosts.json"
+  echo "this file can be edited later with sshmgr -e or sshmgr --edit"
+fi
+
+# installing sshmgr.sh to $HOME/.local/bin/sshmgr/
+echo "installing sshmgr.sh to $HOME/.local/bin/sshmgr/ ..."
+mkdir -p "$HOME/.local/bin/sshmgr"
+cp "sshmgr.sh" "$HOME/.local/bin/sshmgr/"
+
+# adding alias to .bashrc in home directory
+if ! grep -q 'alias sshmgr=' "$HOME/.bashrc" 2>/dev/null; then
+  echo "adding alias to .bashrc ..."
+  echo 'alias sshmgr="bash $HOME/.local/bin/sshmgr/sshmgr.sh"' >>"$HOME/.bashrc"
+else
+  echo "alias already present in .bashrc, skipping."
+fi
+
+touch "$IS_INSTALLED_FILE"
+
+echo "Installation complete!"
+echo "You can now remove the cloned directory."
+echo "note that you need to reopen the terminal (or run 'source ~/.bashrc') to apply"
