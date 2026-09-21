@@ -48,11 +48,13 @@ case "$1" in
   port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port // empty' "$HOSTS_FILE")
   jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost // empty' "$HOSTS_FILE")
 
-  # defaults for optional fields
-  [[ "$host" == "null" ]] && host=""
-  [[ "$user" == "null" ]] && user=""
-  [[ "$port" == "null" || -z "$port" ]] && port="22"
-  [[ "$jumphost" == "null" ]] && jumphost=""
+  # defaults for optional fields (// empty above already maps missing/null -> "")
+  [[ -z "$port" ]] && port="22"
+
+  if ! [[ "$port" =~ ^[0-9]+$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+    echo "error: invalid port '$port' for '$selected'"
+    exit 1
+  fi
 
   if [ -z "$host" ]; then
     echo "error: no host address found for '$selected'"
