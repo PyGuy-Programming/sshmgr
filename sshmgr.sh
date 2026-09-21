@@ -43,18 +43,35 @@ case "$1" in
 
   [[ -z "$selected" ]] && exit 0
 
-  host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host' $HOSTS_FILE)
-  user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user' $HOSTS_FILE)
-  port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port' $HOSTS_FILE)
-  jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost' $HOSTS_FILE)
+  host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host // empty' "$HOSTS_FILE")
+  user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user // empty' "$HOSTS_FILE")
+  port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port // empty' "$HOSTS_FILE")
+  jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost // empty' "$HOSTS_FILE")
+
+  # defaults for optional fields
+  [[ "$host" == "null" ]] && host=""
+  [[ "$user" == "null" ]] && user=""
+  [[ "$port" == "null" || -z "$port" ]] && port="22"
+  [[ "$jumphost" == "null" ]] && jumphost=""
+
+  if [ -z "$host" ]; then
+    echo "error: no host address found for '$selected'"
+    exit 1
+  fi
+
+  if [ -n "$user" ]; then
+    dest="$user@$host"
+  else
+    dest="$host"
+  fi
 
   # try connecting to the selected host
   if [ -z "$jumphost" ]; then
-    echo "Conecting to $selected ($user@$host)..."
-    ssh -p "$port" "$user@$host"
+    echo "Connecting to $selected ($dest)..."
+    ssh -p "$port" "$dest"
   else
-    echo "Connecting to $selected ($user@$host) using $jumphost as jumphost"
-    ssh -pJ "$port" "$jumphost" "$user@$host"
+    echo "Connecting to $selected ($dest) using $jumphost as jumphost"
+    ssh -p "$port" -J "$jumphost" "$dest"
   fi
   ;;
 __info)
