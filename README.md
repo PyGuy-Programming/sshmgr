@@ -2,7 +2,7 @@
 [![Description](https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&duration=3000&color=80B1CD&center=true&multiline=true&repeat=false&width=540&height=100&lines=A+simple+tool+writen+in+bash+to+make++;connecting+to+servers+much+easier+and+faster;(actively+working+on+it+btw))](https://git.io/typing-svg)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/pyguy-programming/sshmgr)
+[![Version](https://img.shields.io/badge/version-2.3.1-blue.svg)](https://github.com/pyguy-programming/sshmgr)
 
 A simple tool written in bash to make connecting to servers much easier and faster.
 
@@ -19,10 +19,6 @@ Repo: https://github.com/pyguy-programming/sshmgr
   - [`-e` / `--edit`](#-e----edit)
   - [`-p` / `--ping`](#-p----ping)
   - [`-h` / `--help`](#-h----help)
-  - [`-j` / `--jumphost`](#-j----jumphost)
-  - [`-f` / `--fzf`](#-f----fzf)
-  - [`-t` / `--test`](#-t----test)
-  - [`-v` / `--version`](#-v----version)
   - [No Argument (Interactive Mode)](#no-argument-interactive-mode)
   - [Option Summary Table](#option-summary-table)
 - [Usage Examples](#usage-examples)
@@ -168,69 +164,6 @@ sshmgr --help
 **Behavior**: Prints a formatted help message showing all available options and
 usage patterns.
 
-### `-j` / `--jumphost`
-
-**Description**: Connect to a specific host using a jumphost (bastion host).
-
-**Usage**:
-
-```bash
-sshmgr -j <host_name>
-sshmgr --jumphost <host_name>
-```
-
-**Behavior**: When used with a host name, connects to the specified host using its
-configured jumphost. If the host has a jumphost configured in `known_hosts.json`, the
-SSH `-J` flag is automatically used.
-
-**Note**: This option is useful for quickly connecting to a host without going
-through the interactive fzf menu.
-
-### `-f` / `--fzf`
-
-**Description**: Force the fzf host selection menu.
-
-**Usage**:
-
-```bash
-sshmgr -f
-sshmgr --fzf
-```
-
-**Behavior**: Forces the interactive fzf host selection menu to appear, even when other
-options might normally take precedence.
-
-### `-t` / `--test`
-
-**Description**: Test SSH connection to a host without fully connecting.
-
-**Usage**:
-
-```bash
-sshmgr -t <host_name>
-sshmgr --test <host_name>
-```
-
-**Behavior**: Attempts to verify connectivity to the specified host. Checks if the host
-is online (using fping if available) and validates SSH connectivity. Does not enter
-an interactive SSH session.
-
-**Note**: This is useful for verifying that a host is reachable before attempting
-a full SSH connection.
-
-### `-v` / `--version`
-
-**Description**: Display the current version of sshmgr.
-
-**Usage**:
-
-```bash
-sshmgr -v
-sshmgr --version
-```
-
-**Behavior**: Prints the version number and basic package information.
-
 ### No Argument (Interactive Mode)
 
 **Description**: Open the interactive fzf host selection menu.
@@ -252,13 +185,8 @@ use the `-J` flag.
 | Edit | `-e` | `--edit` | Open config file in editor |
 | Ping | `-p` | `--ping` | Ping all hosts in parallel |
 | Help | `-h` | `--help` | Show this help message |
-| Jumphost | `-j` | `--jumphost` | Connect via jumphost |
-| Fzf | `-f` | `--fzf` | Force fzf selection |
-| Test | `-t` | `--test` | Test SSH connectivity |
-| Version | `-v` | `--version` | Show version information |
 
-If multiple options are provided, the last recognized option takes effect, following
-the bash `case` statement priority order in the script.
+Any unknown option prints a short error message pointing to `sshmgr -h`.
 
 ## Usage Examples
 
@@ -562,14 +490,12 @@ SSH > [Type to filter, Press Enter to connect, CTRL+Q to quit]
 - Press **Enter** to connect to the selected host
 - Press **CTRL+Q** to quit without connecting
 
-#### Direct Connection via CLI
+#### Connecting via Jumphost
 
-While sshmgr is primarily designed for interactive use, you can connect to a specific
-host using the `--jumphost` option:
-
-```bash
-sshmgr -j <host_name>
-```
+sshmgr is designed for interactive use: run `sshmgr`, pick the host in the fzf
+menu, and if that host has a `jumphost` field configured in `known_hosts.json`,
+SSH automatically connects through it using the `-J` flag. There is no separate
+CLI flag for this — it is driven entirely by the host's configuration.
 
 #### SSH Connection Details
 
@@ -637,12 +563,14 @@ This pings all known hosts in parallel using fping. Output shows the status of e
 
 #### Test a Single Host
 
+To check a single host without opening a full SSH session, ping it directly
+with fping (the same tool `sshmgr -p` uses under the hood):
+
 ```bash
-sshmgr -t <host_name>
+fping -c1 <host>
 ```
 
-This tests SSH connectivity to the specified host and reports whether it's online and
-if SSH is reachable.
+This reports whether the host is online and reachable.
 
 ### Host Management Tips
 
