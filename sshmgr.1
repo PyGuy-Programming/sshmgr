@@ -171,6 +171,51 @@ with a note when
 .B kitten
 is missing or sshmgr runs elsewhere. User, port and jumphost are passed
 through unchanged.
+.SS "If it prints \(aqConnecting to ...\(aq and then nothing happens"
+A hang inside the ssh kitten, not in sshmgr, and it only happens when the
+remote host asks for a
+.BR password .
+.PP
+The kitten does not let
+.B ssh
+prompt in the terminal. Its askpass helper asks kitty to draw the prompt as an
+overlay, by writing a
+.B kitty-ask
+escape sequence to the tty, and then waits for kitty to write the answer into a
+shared memory segment. That wait is an endless poll with no timeout, so if kitty
+never services the request nothing is printed and nothing is read, and the
+connection sits there until interrupted.
+.PP
+Use key-based authentication where possible: no password is then ever
+requested, the overlay is never needed, and the parts of the kitten that pay off
+- near instant reconnects, remote shell integration, terminfo on the remote -
+still work.
+.PP
+To keep typing passwords, let
+.B ssh
+prompt at the terminal instead, by putting
+.PP
+.RS
+.nf
+# ~/.config/kitty/ssh.conf
+askpass ssh
+.fi
+.RE
+.PP
+in place. The rest of the kitten is unaffected; the only cost is a slightly
+slower first connect. The same works for one connection with
+.BI "kitten ssh --kitten askpass=ssh " host .
+.PP
+To see which path is in use, compare against plain
+.BR ssh :
+.PP
+.RS
+.nf
+ssh \-o BatchMode=yes [user@]host
+.fi
+.RE
+.PP
+which fails immediately because no password is requested.
 .SH ENVIRONMENT
 .TP
 .B EDITOR

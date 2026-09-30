@@ -181,6 +181,41 @@ Because the kitten only works from inside a kitty terminal, sshmgr falls back to
 plain `ssh` with a note when `kitten` is missing or the script runs outside
 kitty. `port`, `user` and `jumphost` are passed through unchanged.
 
+#### If it prints "Connecting to ..." and then nothing happens
+
+This is a hang inside kitty's ssh kitten, not in sshmgr, and it only happens
+when the remote host asks for a **password**.
+
+The kitten does not let `ssh` prompt in the terminal. Instead its askpass helper
+asks kitty to draw the prompt as an overlay, by writing a `kitty-ask` escape
+sequence to the tty, and then waits for kitty to write the answer back into a
+shared memory segment. That wait is an endless poll with no timeout, so if kitty
+never services the request, nothing is printed and nothing is read — the
+connection just sits there until you interrupt it.
+
+Use key-based authentication if you can: then no password is ever requested, the
+overlay is never needed, and you keep the part of the kitten that actually pays
+off (near-instant reconnects, remote shell integration, terminfo on the remote).
+
+If you want to keep typing passwords, turn the overlay off and let `ssh` prompt
+at the terminal as usual:
+
+```bash
+# ~/.config/kitty/ssh.conf
+askpass ssh
+```
+
+Everything else about the kitten keeps working; the only cost is a slightly
+slower first connect, because the kitten can no longer send its setup data
+before `ssh` is done with the terminal. The same works for a single connection
+with `kitten ssh --kitten askpass=ssh <host>`.
+
+To confirm which path you are on, compare against plain `ssh`:
+
+```bash
+ssh -o BatchMode=yes <user>@<host>      # fails at once, no prompt needed
+```
+
 Tips: keep the JSON valid, use descriptive names, and test jumphosts manually
 first (`ssh -J bastion user@target`). Entries from the old plain-text format
 (`user@address - name` in `known_hosts.save`) can be migrated by converting
@@ -196,6 +231,7 @@ each line into a JSON entry as above.
 | Ping shows offline but SSH works | ICMP is often blocked — ping is only an indicator, not a requirement |
 | `command not found` | Check the alias in `.bashrc` (`source ~/.bashrc`) or reinstall via brew |
 | `kitten ssh` errors out | Set `"kitten_ssh": false`, or run sshmgr from inside a kitty terminal |
+| "Connecting to ..." then nothing | Password prompt hang in kitty's ssh kitten, see [If it prints "Connecting to ..."](#if-it-prints-connecting-to--and-then-nothing-happens) |
 | `sshmgr -a` asks on stdin instead of drawing the form | There is no terminal to draw on, e.g. piped output or cron |
 
 Diagnostics:
