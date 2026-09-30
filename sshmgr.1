@@ -1,0 +1,232 @@
+.TH SSHMGR 1 "2026-09-30" "sshmgr 2.4.1" "User Commands"
+.SH NAME
+sshmgr \- connect to ssh hosts from a menu
+.SH SYNOPSIS
+.B sshmgr
+.RI [ options ]
+.SH DESCRIPTION
+.B sshmgr
+keeps a list of ssh hosts in a json file and connects to them from a menu
+instead of from remembered command lines. Run it without options to pick a
+host with fuzzy search; the preview shows whether the host answers a ping and
+which user, port and bastion host will be used.
+.PP
+Hosts can also be added and removed from inside
+.BR sshmgr ,
+without editing the json by hand, and connections can optionally go through
+kitty's ssh kitten.
+.SH OPTIONS
+.TP
+.B sshmgr
+.br
+Open the host menu. Type to filter, arrow keys to move,
+.B enter
+to connect,
+.B ctrl\-q
+to quit. If a host has a
+.B jumphost
+it is connected through it with
+.BR "ssh \-J" .
+.TP
+.BR \-e ", " \-\-edit
+Open the hosts file in
+.BR $EDITOR .
+.TP
+.BR \-a ", " \-\-add
+Add a host. Without arguments a form is opened, see
+.BR "THE ADD FORM" .
+.TP
+.BI \-a " NAME HOST [USER [PORT [JUMPHOST]]]"
+Add a host without asking anything. Empty arguments are allowed and are left
+out of the entry, so an empty port keeps the default of 22. Fails if the name
+is already taken or the port is not a number between 1 and 65535.
+.TP
+.BR \-r ", " \-\-remove
+Remove hosts. Without arguments they are picked with
+.BR fzf ,
+using the same preview as the menu.
+.TP
+.BI \-r " NAME..."
+Remove the given hosts without asking anything. Nothing is removed unless
+every name exists.
+.TP
+.BR \-p ", " \-\-ping
+Ping all known hosts in parallel with
+.BR fping .
+.TP
+.BR \-h ", " \-\-help
+Print a usage summary.
+.SH THE ADD FORM
+Run as
+.B sshmgr \-a
+with a terminal, sshmgr draws its own form: one text box per field with a
+caret in the field being edited. Anything that keeps the entry from being
+written is shown on the field that causes it, and the entry is only written
+once it is complete.
+.PP
+Keys:
+.TP
+.B tab, enter
+Next field.
+.TP
+.B shift\-tab, up
+Previous field.
+.TP
+.B left, right
+Move the caret inside the field.
+.TP
+.B backspace, delete
+Delete a character.
+.TP
+.B ctrl\-u
+.br
+Clear the whole field.
+.TP
+.B ctrl\-s, ctrl-d
+Write the entry.
+.TP
+.B esc, ctrl\-c
+Quit without writing.
+.PP
+The form needs a terminal. Without one, for example in a script or with
+output redirected, sshmgr asks for each field on stdin instead.
+.SH THE REMOVE LIST
+.TP
+.B tab
+.br
+Select the entry and move on.
+.TP
+.B enter
+.br
+Remove everything selected.
+.TP
+.B esc
+.br
+Quit.
+.PP
+Nothing is removed while browsing: the file is only changed when
+.B enter
+is pressed.
+.SH CONFIGURATION
+The hosts live in
+.IR ~/.config/sshmgr/known_hosts.json ,
+which is created with an empty list on first run and validated with
+.B jq
+on every start.
+.PP
+.nf
+{
+  "kitten_ssh": false,
+  "hosts": [
+    { "name": "web-server", "host": "example.com", "user": "deploy", "port": "2222" },
+    { "name": "internal-db", "host": "10.0.0.50", "user": "admin", "jumphost": "bastion.example.com" }
+  ]
+}
+.fi
+.PP
+Each entry has the following fields:
+.TP
+.B name
+.br
+Display name in the menu. Required and must be unique, since hosts are looked
+up by it.
+.TP
+.B host
+.br
+Hostname or ip address. Required.
+.TP
+.B user
+.br
+Ssh user. Optional, defaults to the local user.
+.TP
+.B port
+.br
+Ssh port. Optional, defaults to 22, must be between 1 and 65535.
+.TP
+.B jumphost
+.br
+Bastion host to connect through with
+.BR "ssh \-J" .
+Optional.
+.PP
+.B port
+and
+.B jumphost
+are stored as strings, and an omitted field and an empty string mean the same
+thing.
+.SH THE KITTY SSH KITTEN
+Setting
+.B "kitten_ssh"
+to
+.B true
+makes connections go through kitty's ssh kitten instead of
+.BR ssh .
+It is a drop-in replacement that sets up shell integration on the remote
+host, reuses existing connections to make reconnecting fast, and makes kitty's
+terminfo database available there.
+.PP
+The kitten only works from inside a kitty terminal, so sshmgr falls back to
+.B ssh
+with a note when
+.B kitten
+is missing or sshmgr runs elsewhere. User, port and jumphost are passed
+through unchanged.
+.SH ENVIRONMENT
+.TP
+.B EDITOR
+.br
+Used by
+.BR "\-e" .
+.TP
+.B NO_COLOR
+.br
+Leaves the add form without colour. The caret stays visible, since reverse
+video is a text attribute rather than a colour.
+.TP
+.B KITTY_WINDOW_ID
+.br
+Set by kitty. Checked before
+.B "kitten ssh"
+is used.
+.SH EXIT STATUS
+.TP
+.B 0
+.br
+Success, including quitting a menu or form without changing anything.
+.TP
+.B 1
+.br
+The hosts file is not valid json, a host was not found, a port or name was
+rejected, or the file could not be written.
+.SH EXAMPLES
+.TP
+.B sshmgr -a web-server example.com deploy 2222
+Add a host without any questions.
+.TP
+.B sshmgr -a
+Fill the form in and save it with ctrl-s.
+.TP
+.B sshmgr -a internal-db 10.0.0.50 admin 22 bastion.example.com
+Add a host that is reached through a bastion.
+.TP
+.B sshmgr -r old-server test-box
+Remove two hosts without opening the list.
+.SH FILES
+.TP
+.I ~/.config/sshmgr/known_hosts.json
+The host list and the settings. Also created by
+.B sshmgr \-e .
+.SH DEPENDENCIES
+.BR fzf ,
+for the menus,
+.BR jq ,
+for reading and writing the file, and
+.BR fping ,
+optional, for
+.B \-p
+and the online status in the preview.
+.SH SEE ALSO
+.BR fzf (1),
+.BR jq (1),
+.BR fping (8),
+.BR ssh (1)

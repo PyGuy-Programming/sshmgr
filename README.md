@@ -2,7 +2,7 @@
 [![Description](https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&duration=3000&color=80B1CD&center=true&multiline=true&repeat=false&width=540&height=100&lines=A+simple+tool+writen+in+bash+to+make++;connecting+to+servers+much+easier+and+faster;(actively+working+on+it+btw))](https://git.io/typing-svg)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version: 2.4.0](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/pyguy-programming/sshmgr)
+[![Version: 2.4.1](https://img.shields.io/badge/version-2.4.1-blue.svg)](https://github.com/pyguy-programming/sshmgr)
 
 A simple tool written in bash to make connecting to servers much easier and faster.
 
@@ -37,7 +37,8 @@ brew tap PyGuy-Programming/sshmgr
 brew install sshmgr
 ```
 
-This pulls in the dependencies (`fzf`, `jq`, `fping`) automatically.
+This pulls in the dependencies (`fzf`, `jq`, `fping`) automatically and installs
+the manual page, so `man sshmgr` works.
 
 ### Manual Installation
 
@@ -54,9 +55,11 @@ Or install step by step:
 #    macOS: brew install fzf jq fping
 #    Debian/Ubuntu: sudo apt-get install fzf jq fping
 
-# 2. Copy the script
-mkdir -p "$HOME/.local/bin/sshmgr"
+# 2. Copy the script and install the manual page
+mkdir -p "$HOME/.local/bin/sshmgr" "$HOME/.local/share/man/man1"
 cp sshmgr.sh "$HOME/.local/bin/sshmgr/"
+cp sshmgr.1 "$HOME/.local/share/man/man1/"
+grep -q MANPATH ~/.bashrc || echo 'export MANPATH="$HOME/.local/share/man:${MANPATH:-}"' >> ~/.bashrc
 
 # 3. Add alias and reload
 echo 'alias sshmgr="bash $HOME/.local/bin/sshmgr/sshmgr.sh"' >> ~/.bashrc
@@ -65,6 +68,8 @@ source ~/.bashrc
 # 4. Initialize the hosts file
 sshmgr -e
 ```
+
+Both paths end up with a working `man sshmgr`.
 
 ## Usage
 
@@ -76,6 +81,8 @@ sshmgr -e
 | `sshmgr -r` / `--remove` | Remove hosts, picked in fzf or given as arguments |
 | `sshmgr -p` / `--ping` | Ping all known hosts in parallel (fping) |
 | `sshmgr -h` / `--help` | Show help |
+
+Everything is also written up in the manual: `man sshmgr`.
 
 ### Adding hosts
 
@@ -194,6 +201,7 @@ each line into a JSON entry as above.
 Diagnostics:
 
 ```bash
+man sshmgr                            # what am I forgetting again?
 sshmgr -h                              # script runs?
 jq . ~/.config/sshmgr/known_hosts.json # valid JSON?
 which fzf fping jq ssh                 # dependencies present?

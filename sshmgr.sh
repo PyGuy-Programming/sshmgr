@@ -442,7 +442,41 @@ case "$1" in
   ;;
 -h | --help)
   # printing help/usage information
-  echo -e "Usage:\n \nsshmgr | opens host selection. exit py pressing CTRL+Q\n \nsshmgr -e / sshmgr --edit | opens the known hosts file with standart editor for you to edit it\n \nsshmgr -a / sshmgr --add | adds a host in a small form, or from arguments: sshmgr -a <name> <host> [user] [port] [jumphost]\n \nsshmgr -r / sshmgr --remove | removes hosts picked in fzf, or from arguments: sshmgr -r <name>...\n \nsshmgr -p / sshmgr --ping | pings all known hosts in parallel\n \nsshmgr -h / sshmgr --help | shows this text for help"
+  cat <<'USAGE'
+sshmgr - connect to your hosts without typing ssh commands
+
+usage:
+  sshmgr                            open the host menu, enter connects
+  sshmgr -e                         edit the hosts file in $EDITOR
+  sshmgr -a                         add a host in a form
+  sshmgr -a NAME HOST [USER] [PORT] [JUMPHOST]
+                                    add a host without being asked anything
+  sshmgr -r                         pick hosts to remove in fzf
+  sshmgr -r NAME...                 remove the given hosts
+  sshmgr -p                         ping all hosts in parallel
+  sshmgr -h                         this text
+
+keys in the add form:
+  tab / enter      next field            left / right   move the caret
+  shift-tab / up   previous field        backspace      delete a character
+  ctrl-u           clear the field       ctrl-s         write the entry
+  esc / ctrl-c     quit
+
+keys in the remove list:
+  tab              select and move on    enter          remove what is selected
+  esc              quit
+
+files:
+  ~/.config/sshmgr/known_hosts.json   hosts and settings
+  set "kitten_ssh": true there to connect with kitty's ssh kitten
+
+examples:
+  sshmgr -a web-server example.com deploy 2222
+  sshmgr -a internal-db 10.0.0.50 admin 22 bastion.example.com
+  sshmgr -r old-server test-box
+
+run 'man sshmgr' for the full manual.
+USAGE
   ;;
 "")
   # starting selection of known hosts if no option is given

@@ -51,6 +51,19 @@ echo "installing sshmgr.sh to $HOME/.local/bin/sshmgr/ ..."
 mkdir -p "$HOME/.local/bin/sshmgr"
 cp "sshmgr.sh" "$HOME/.local/bin/sshmgr/"
 
+# the manual page, into the user local man directory
+echo "installing the manual page ..."
+mkdir -p "$HOME/.local/share/man/man1"
+cp "sshmgr.1" "$HOME/.local/share/man/man1/"
+
+# man only looks there when the path is exported
+if ! grep -q 'MANPATH' "$HOME/.bashrc" 2>/dev/null; then
+  echo 'export MANPATH="$HOME/.local/share/man:${MANPATH:-}"' >>"$HOME/.bashrc"
+  echo "added MANPATH to .bashrc, so 'man sshmgr' finds it"
+else
+  echo "MANPATH already set in .bashrc, make sure it includes \$HOME/.local/share/man"
+fi
+
 # adding alias to .bashrc in home directory
 if ! grep -q 'alias sshmgr=' "$HOME/.bashrc" 2>/dev/null; then
   echo "adding alias to .bashrc ..."
