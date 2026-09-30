@@ -2,7 +2,7 @@
 [![Description](https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&duration=3000&color=80B1CD&center=true&multiline=true&repeat=false&width=540&height=100&lines=A+simple+tool+writen+in+bash+to+make++;connecting+to+servers+much+easier+and+faster;(actively+working+on+it+btw))](https://git.io/typing-svg)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-2.3.1-blue.svg)](https://github.com/pyguy-programming/sshmgr)
+[![Version: 2.4.0](https://img.shields.io/badge/version-2.4.0-blue.svg)](https://github.com/pyguy-programming/sshmgr)
 
 A simple tool written in bash to make connecting to servers much easier and faster.
 
@@ -24,6 +24,9 @@ Repo: https://github.com/pyguy-programming/sshmgr
 - **Parallel ping**: check all hosts at once with fping (`sshmgr -p`)
 - **JSON configuration**: easy-to-read host definitions in `~/.config/sshmgr/known_hosts.json`
 - **Custom user/port per host**, with port validation (defaults to 22)
+- **Add hosts in a built-in form**: `sshmgr -a` opens one text box per field, with live validation
+- **Remove hosts**: `sshmgr -r` picks them in fzf (multi-select), or takes them as arguments
+- **Optional kitty ssh kitten**: connect through `kitten ssh` for shell integration and connection reuse (toggleable)
 
 ## Installation
 
@@ -69,8 +72,65 @@ sshmgr -e
 |---------|-------------|
 | `sshmgr` | Open the interactive fzf host selection menu |
 | `sshmgr -e` / `--edit` | Open `known_hosts.json` in `$EDITOR` |
+| `sshmgr -a` / `--add` | Add a host in the built-in form, or from arguments |
+| `sshmgr -r` / `--remove` | Remove hosts, picked in fzf or given as arguments |
 | `sshmgr -p` / `--ping` | Ping all known hosts in parallel (fping) |
 | `sshmgr -h` / `--help` | Show help |
+
+### Adding hosts
+
+With arguments, the entry is written straight away and nothing is asked:
+
+```bash
+sshmgr -a web-server example.com                       # user, port, jumphost stay empty
+sshmgr -a web-server example.com deploy 2222
+sshmgr -a internal-db 10.0.0.50 admin 22 bastion.example.com
+```
+
+Without arguments, sshmgr opens a form. It is drawn by the script itself, one
+text box per field, and the box you are in gets the caret. Anything that would
+keep the entry from being written is shown on the spot:
+
+```
+  ╭─ sshmgr · new host ──────────────────────────────────────╮
+  │                                                          │
+  │ name      [ web-server                                   ] │
+  │ host      [ a host address is required                   ] │
+  │ user      [ optional                                     ] │
+  │ port      [ optional                                     ] │
+  │ jumphost  [ optional                                     ] │
+  │                                                          │
+  ├──────────────────────────────────────────────────────────╮
+  │ ! a host address is required                             │
+  ╰──────────────────────────────────────────────────────────╯
+
+  ⇥/⇧⇥ field   ← → move   ⌫ delete   ^U clear   ^S save   esc cancel
+```
+
+| Key | Effect |
+|-----|--------|
+| `⇥` / `⏎` | next field |
+| `⇧⇥` / `↑` | previous field |
+| `←` `→` | move the caret inside the field |
+| `⌫` / `⌦` | delete a character |
+| `^U` | clear the whole field |
+| `^S` or `^D` | write the entry, once it is complete |
+| `esc` or `^C` | quit without writing |
+
+Blank fields are left out of the entry, so an empty port keeps the `22` default,
+and names must be unique. The form needs a terminal; in a script (or with
+`NO_COLOR` set) sshmgr falls back to asking for each field on stdin instead.
+
+### Removing hosts
+
+`sshmgr -r` opens the host list in fzf with the same preview as the connect
+menu: `⇥` selects an entry and moves on, `⏎` removes everything selected, `esc`
+cancels. Names can also be passed directly, which removes them without a prompt:
+
+```bash
+sshmgr -r old-server          # remove one
+sshmgr -r old-server test-box # remove several
+```
 
 In the selection menu: type to filter, `↑/↓` to navigate, `Enter` to connect,
 `CTRL+Q` to quit. The preview shows each host's online status (via fping, if
@@ -87,6 +147,7 @@ run). The script validates it with `jq` on startup and exits with
 
 ```json
 {
+  "kitten_ssh": false,
   "hosts": [
     { "name": "web-server", "host": "example.com", "user": "deploy", "port": "2222" },
     { "name": "internal-db", "host": "10.0.0.50", "user": "admin", "jumphost": "bastion.example.com" }
@@ -102,6 +163,17 @@ run). The script validates it with `jq` on startup and exits with
 | `port` | No | SSH port (defaults to `22`; must be 1–65535) |
 | `jumphost` | No | Bastion host for `ssh -J`; omit if unused |
 
+### kitty ssh kitten
+
+Set the top-level `"kitten_ssh": true` to connect via kitty's ssh kitten
+instead of plain `ssh`. It is a drop-in replacement for `ssh` that adds remote
+shell integration, connection multiplexing (much faster reconnects) and makes
+the kitty terminfo database available on the remote host.
+
+Because the kitten only works from inside a kitty terminal, sshmgr falls back to
+plain `ssh` with a note when `kitten` is missing or the script runs outside
+kitty. `port`, `user` and `jumphost` are passed through unchanged.
+
 Tips: keep the JSON valid, use descriptive names, and test jumphosts manually
 first (`ssh -J bastion user@target`). Entries from the old plain-text format
 (`user@address - name` in `known_hosts.save`) can be migrated by converting
@@ -116,6 +188,8 @@ each line into a JSON entry as above.
 | Connection fails | Verify `host`/`user`/`port`; run `sshmgr -p`, then try manually: `ssh -p <port> <user>@<host>` (add `-J <jumphost>` if configured) |
 | Ping shows offline but SSH works | ICMP is often blocked — ping is only an indicator, not a requirement |
 | `command not found` | Check the alias in `.bashrc` (`source ~/.bashrc`) or reinstall via brew |
+| `kitten ssh` errors out | Set `"kitten_ssh": false`, or run sshmgr from inside a kitty terminal |
+| `sshmgr -a` asks on stdin instead of drawing the form | There is no terminal to draw on, e.g. piped output or cron |
 
 Diagnostics:
 
