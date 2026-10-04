@@ -132,8 +132,18 @@ The form is drawn in the colours of the rainbow: every field keeps one colour
 of the flag, the field you are editing is the bold version of its own colour,
 the edges of the box run through the same colours from top to bottom, and the
 rule under the title is striped to match. The colours belong to the fields
-rather than cycling, so nothing flickers while typing. The host menu and the
-remove list are painted the same way. `NO_COLOR` turns all of it off.
+rather than cycling, so nothing flickers while typing. The host menu, the remove
+list and the preview pane are painted the same way.
+
+The pride version of the theme is **June**, and afterwards it goes away a
+little every day rather than all at once, the way a pride logo does: the colours
+fade into the plain grey theme over the course of July and are gone by the
+start of August, coming back the following June. The fade is interpolated per
+day, so it is a smooth dissolve rather than a switch — and on terminals that
+advertise `COLORTERM=truecolor` it is a real per-channel blend instead of the
+six steps a 256-colour palette would band it into.
+
+`NO_COLOR` turns the whole thing off, menus and preview included.
 
 ### Removing hosts
 

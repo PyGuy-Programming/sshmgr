@@ -97,14 +97,112 @@ add_colors() {
   ADD_C_ERR=$'\e[1;38;5;203m'
   ADD_C_OK=$'\e[38;5;114m'
   ADD_C_HINT=$'\e[38;5;240m'
-  ADD_C_PRIDE=(
-    $'\e[38;5;203m' $'\e[38;5;215m' $'\e[38;5;222m'
-    $'\e[38;5;114m' $'\e[38;5;75m' $'\e[38;5;141m'
-  )
-  ADD_C_PRIDE_BOLD=(
-    $'\e[1;38;5;203m' $'\e[1;38;5;215m' $'\e[1;38;5;222m'
-    $'\e[1;38;5;114m' $'\e[1;38;5;75m' $'\e[1;38;5;141m'
-  )
+  # does this terminal do 24 bit colour? without it the fade bands badly
+  ADD_C_TRUE=0
+  case "${COLORTERM:-}" in
+  truecolor | 24bit) ADD_C_TRUE=1 ;;
+  esac
+
+  # the flag is at full strength in june and fades out day by day afterwards
+  ADD_PRIDE_LEVEL=$(add_pride_level)
+  if [ "$ADD_PRIDE_LEVEL" -gt 0 ]; then
+    ADD_C_PRIDE=()
+    ADD_C_PRIDE_BOLD=()
+    for i in 1 2 3 4 5 6; do
+      ADD_C_PRIDE+=("$(printf '\e[38;%sm' "$(add_pride_rgb "$i" "$ADD_PRIDE_LEVEL")")")
+      ADD_C_PRIDE_BOLD+=("$(printf '\e[1;38;%sm' "$(add_pride_rgb "$i" "$ADD_PRIDE_LEVEL")")")
+    done
+  fi
+}
+
+# how much rainbow is showing, in per mille: the pride version of the theme is
+# june, and it goes away again a little every day through july rather than all
+# at once, the way a pride logo does. the plain grey theme is what is left when
+# it is gone. only needs date(1), no epoch arithmetic.
+ADD_PRIDE_FADE_DAYS=30
+add_pride_level() {
+  local md m d
+  md=$(date '+%m %d') || return 0
+  m=${md% *}
+  d=${md#* }
+  case "$m" in
+  06) printf 1000 ;;
+  07) printf '%s' $((1000 * (ADD_PRIDE_FADE_DAYS - 10#$d) / ADD_PRIDE_FADE_DAYS)) ;;
+  *) printf 0 ;;
+  esac
+}
+
+# the six colours of the flag, and the neutral they fade towards
+ADD_PRIDE_RGB=(237 80 80 245 150 60 245 215 90 95 205 120 95 150 245 185 120 230)
+ADD_PRIDE_FADE=(168 172 182)
+
+# the cube levels of the xterm-256 palette
+ADD_CUBE=(0 95 135 175 215 255)
+
+# prints the position in ADD_CUBE of whichever level is closest to $1, in
+# ADD_NEAREST. a function rather than a substitution to keep the forks out of
+# the redraw.
+add_nearest() {
+  local v="$1" i d best=999999
+  for i in 0 1 2 3 4 5; do
+    d=$(((ADD_CUBE[i] - v) * (ADD_CUBE[i] - v)))
+    if [ "$d" -lt "$best" ]; then
+      best=$d
+      ADD_NEAREST=$i
+    fi
+  done
+}
+
+# prints the xterm-256 colour closest to the given rgb. both the colour cube
+# and the grey ramp are tried, because a colour that has mostly faded out is
+# usually nearer to a grey than to any cube entry.
+add_rgb256() {
+  local r="$1" g="$2" b="$3" ri gi bi idx d bestg=999999 gv gk dcube
+  add_nearest "$r"
+  ri=$ADD_NEAREST
+  add_nearest "$g"
+  gi=$ADD_NEAREST
+  add_nearest "$b"
+  bi=$ADD_NEAREST
+  idx=$((16 + 36 * ri + 6 * gi + bi))
+
+  dcube=$(((ADD_CUBE[ri] - r) * (ADD_CUBE[ri] - r)
+    + (ADD_CUBE[gi] - g) * (ADD_CUBE[gi] - g)
+    + (ADD_CUBE[bi] - b) * (ADD_CUBE[bi] - b)))
+
+  # the error has to be measured the same way for both candidates, so the grey
+  # is compared against all three channels too, not just their average
+  for gk in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do
+    local gv0=$((8 + gk * 10))
+    d=$(((gv0 - r) * (gv0 - r) + (gv0 - g) * (gv0 - g) + (gv0 - b) * (gv0 - b)))
+    if [ "$d" -lt "$bestg" ]; then
+      bestg=$d
+      gv=$((232 + gk))
+    fi
+  done
+
+  if [ "$bestg" -lt "$dcube" ]; then printf '%s' "$gv"; else printf '%s' "$idx"; fi
+}
+
+# the $1th colour of the flag at $2 per mille of its strength, as an sgr colour
+# fragment. a 256 colour palette only has six steps per channel, which makes a
+# fade visibly banded, so terminals that advertise truecolor get exact values.
+add_pride_rgb() {
+  local i=$((($1 - 1) * 3)) level="$2" r g b
+  r=$(((ADD_PRIDE_RGB[i] * level + ADD_PRIDE_FADE[0] * (1000 - level)) / 1000))
+  g=$(((ADD_PRIDE_RGB[i + 1] * level + ADD_PRIDE_FADE[1] * (1000 - level)) / 1000))
+  b=$(((ADD_PRIDE_RGB[i + 2] * level + ADD_PRIDE_FADE[2] * (1000 - level)) / 1000))
+  if [ "$ADD_C_TRUE" = "1" ]; then
+    printf '2;%d;%d;%d' "$r" "$g" "$b"
+  else
+    printf '5;%s' "$(add_rgb256 "$r" "$g" "$b")"
+  fi
+}
+
+# one "label   value" line for the preview, the label in a colour of the flag
+add_info_line() {
+  printf '%s%-10s%s %s%s%s\n' "$(add_hue "$3")" "$1" "$ADD_C_OFF" \
+    "$ADD_C_VALUE" "$2" "$ADD_C_OFF"
 }
 
 # prints the $1th colour of the flag, or nothing when colour is off
@@ -638,17 +736,31 @@ __info)
   # internal: called by the fzf preview, shows status + details.
   # fzf passes the item as painted, so the name arrives with colour on it
   name=$(printf '%s' "$2" | add_uncolour)
+  add_colors
   info_host=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
 
+  # the status is coloured by what it means, the details by the flag
   if command -v fping >/dev/null 2>&1; then
-    timeout 2 fping -c1 "$info_host" >/dev/null 2>&1 && echo "● online" || echo "○ offline"
+    if timeout 2 fping -c1 "$info_host" >/dev/null 2>&1; then
+      printf '%s● online%s\n' "$ADD_C_OK" "$ADD_C_OFF"
+    else
+      printf '%s○ offline%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
+    fi
     echo
   fi
 
-  jq -r --arg name "$name" '.hosts[] | select(.name == $name) |
-    "User:     \(.user)\nHost:     \(.host)\nPort:     \(.port // "?")\nJumphost: \(.jumphost | if . == null or . == "" then "-" else . end)"' "$HOSTS_FILE"
-  if [ -z "$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .name' "$HOSTS_FILE")" ]; then
-    echo "(host not found)"
+  info=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) |
+    [ (.user // ""), .host, (.port // "?"),
+      (.jumphost | if . == null or . == "" then "-" else . end) ] | @tsv' "$HOSTS_FILE")
+
+  if [ -z "$info" ]; then
+    printf '%s(host not found)%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
+  else
+    IFS=$'\t' read -r i_user i_host i_port i_jump <<<"$info"
+    add_info_line "User:" "${i_user:--}" 0
+    add_info_line "Host:" "${i_host:--}" 1
+    add_info_line "Port:" "$i_port" 2
+    add_info_line "Jumphost:" "$i_jump" 3
   fi
   ;;
 *)

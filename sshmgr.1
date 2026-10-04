@@ -100,6 +100,20 @@ under the title is striped to match. The colours belong to the fields rather
 than cycling, so nothing flickers while typing. A value too long for its box is
 shown as a window around the caret, marked with an ellipsis, so the frame keeps
 its shape.
+.PP
+The pride version of the theme is june. Afterwards it goes away a little every
+day rather than all at once, the way a pride logo does: the colours fade into
+the plain grey theme over the course of july and are gone by the start of
+august, returning the following june. The fade is interpolated per day, so it
+is a smooth dissolve; terminals advertising
+.B COLORTERM=truecolor
+get a real per channel blend instead of the six steps a 256 colour palette
+would band it into.
+.SH THE REMOVE LIST
+The hosts are picked with
+.BR fzf ,
+with the same preview as the menu, and the list is painted in the colours of the
+rainbow with one colour per host.
 .TP
 .B tab
 .br
@@ -232,9 +246,20 @@ which fails immediately because no password is requested.
 Used by
 .BR "\-e" .
 .TP
+.B COLORTERM
 .br
-Leaves the form and the menus without colour. The caret stays visible, since
-reverse video is a text attribute rather than a colour.
+When it is
+.B truecolor
+or
+.BR 24bit ,
+the rainbow is blended in full 24 bit colour, which is what makes the daily fade
+smooth. Otherwise the nearest 256 colour palette entry is used.
+.TP
+.B NO_COLOR
+.br
+Leaves the form, the menus and the preview without colour. The caret stays
+visible, since reverse video is a text attribute rather than a colour.
+.TP
 .B KITTY_WINDOW_ID
 .br
 Set by kitty. Checked before
