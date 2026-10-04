@@ -90,6 +90,16 @@ Quit without writing.
 .PP
 The form needs a terminal. Without one, for example in a script or with
 output redirected, sshmgr asks for each field on stdin instead.
+.PP
+During june the form wears a small rainbow: one colour of the flag per field,
+and the title rule turns into the stripes. The colours belong to the fields
+rather than cycling, so nothing flickers while typing. Set
+.B SSH_MGR_PRIDE
+to
+.B 1
+or
+.B 0
+to have it outside june as well.
 .SH THE REMOVE LIST
 .TP
 .B tab
@@ -223,10 +233,16 @@ which fails immediately because no password is requested.
 Used by
 .BR "\-e" .
 .TP
+.B SSH_MGR_PRIDE
+Force the add form rainbow on or off. The default,
+.BR auto ,
+turns it on during june only.
+.TP
 .B NO_COLOR
 .br
 Leaves the add form without colour. The caret stays visible, since reverse
-video is a text attribute rather than a colour.
+video is a text attribute rather than a colour. This wins over
+.BR SSH_MGR_PRIDE .
 .TP
 .B KITTY_WINDOW_ID
 .br

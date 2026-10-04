@@ -74,23 +74,67 @@ add_write() {
 # the field being edited and ADD_CARET the position inside it.
 # --------------------------------------------------------------------------
 
-# the few colours the form needs, skipped entirely when NO_COLOR is set
+# the few colours the form needs, skipped entirely when NO_COLOR is set.
+# during june it gets a rainbow instead: one hue per field and a striped rule
+# along the top border. the colours are fixed per field rather than cycling, so
+# nothing flickers while typing.
 add_colors() {
   # reverse video is what makes the caret readable; it survives NO_COLOR
   ADD_C_CARET=$'\e[1;7m'
+  ADD_C_PRIDE=()
+  ADD_C_PRIDE_BOLD=()
+
+  case "${SSH_MGR_PRIDE:-auto}" in
+  0 | no | off) want_pride=0 ;;
+  1 | yes | on) want_pride=1 ;;
+  *) [ "$(date +%m)" = "06" ] && want_pride=1 || want_pride=0 ;;
+  esac
+
   if [ -n "${NO_COLOR:-}" ]; then
     ADD_C_OFF= ADD_C_LABEL= ADD_C_VALUE= ADD_C_FRAME=
     ADD_C_FOCUS= ADD_C_ERR= ADD_C_OK= ADD_C_HINT=
-  else
-    ADD_C_OFF=$'\e[0m'
-    ADD_C_LABEL=$'\e[38;5;244m'
-    ADD_C_VALUE=$'\e[38;5;252m'
-    ADD_C_FRAME=$'\e[38;5;238m'
-    ADD_C_FOCUS=$'\e[1;38;5;117m'
-    ADD_C_ERR=$'\e[1;38;5;203m'
-    ADD_C_OK=$'\e[38;5;114m'
-    ADD_C_HINT=$'\e[38;5;240m'
+    return
   fi
+
+  ADD_C_OFF=$'\e[0m'
+  ADD_C_LABEL=$'\e[38;5;244m'
+  ADD_C_VALUE=$'\e[38;5;252m'
+  ADD_C_FRAME=$'\e[38;5;238m'
+  ADD_C_FOCUS=$'\e[1;38;5;117m'
+  ADD_C_ERR=$'\e[1;38;5;203m'
+  ADD_C_OK=$'\e[38;5;114m'
+  ADD_C_HINT=$'\e[38;5;240m'
+
+  if [ "$want_pride" = "1" ]; then
+    ADD_C_PRIDE=(
+      $'\e[38;5;203m' $'\e[38;5;215m' $'\e[38;5;222m'
+      $'\e[38;5;114m' $'\e[38;5;75m' $'\e[38;5;141m'
+    )
+    ADD_C_PRIDE_BOLD=(
+      $'\e[1;38;5;203m' $'\e[1;38;5;215m' $'\e[1;38;5;222m'
+      $'\e[1;38;5;114m' $'\e[1;38;5;75m' $'\e[1;38;5;141m'
+    )
+  fi
+}
+
+# prints $1 copies of the character $2, but in june as a striped rainbow rule
+add_rule() {
+  local width="$1" segs="${#ADD_C_PRIDE[@]}" i part used=0 out=""
+  if [ "$segs" -eq 0 ]; then
+    add_repeat "$2" "$width"
+    return
+  fi
+  for ((i = 0; i < segs; i++)); do
+    # the last stripe takes whatever is left, so the rule keeps its width
+    if [ "$i" -eq $((segs - 1)) ]; then
+      part=$((width - used))
+    else
+      part=$((width / segs))
+    fi
+    used=$((used + part))
+    out+="${ADD_C_PRIDE_BOLD[i]}$(add_repeat "$2" "$part")$ADD_C_OFF"
+  done
+  printf '%s' "$out"
 }
 
 # prints $1 padded with spaces to $2 characters, cut short with an ellipsis when
@@ -117,7 +161,7 @@ add_repeat() {
 # same column no matter how long the values are.
 add_form_draw() {
   local size cols inner label_w box_w value msg i key val shown problems status
-  local text_color box_color label_color top title head_txt tail_txt caret_char content
+  local text_color box_color label_color top title head_txt tail_txt caret_char content hues
 
   size=$(stty size 2>/dev/null)
   cols=${size##* }
@@ -140,7 +184,7 @@ add_form_draw() {
   printf '  %s╭─%s %s%s%s %s%s╮\e[K\r\n' \
     "$ADD_C_FRAME" "$ADD_C_OFF" \
     "$ADD_C_LABEL" "$title" "$ADD_C_OFF" \
-    "$ADD_C_FRAME" "$(add_repeat ─ $((cols - 4 - ${#title} - 3)))"
+    "$ADD_C_FRAME" "$(add_rule $((cols - 4 - ${#title} - 3)) ─)"
 
   printf '  %s│%s%s│%s\e[K\r\n' "$ADD_C_FRAME" "$ADD_C_OFF" \
     "$(add_pad "" "$inner")" "$ADD_C_OFF"
@@ -155,9 +199,19 @@ add_form_draw() {
     text_color="$ADD_C_VALUE"
     box_color="$ADD_C_FRAME"
     label_color="$ADD_C_LABEL"
+    hues=${#ADD_C_PRIDE[@]}
+    if [ "$hues" -gt 0 ]; then
+      # one colour of the flag per field, the focused one in bold
+      if [ "$i" -eq "$ADD_FOCUS" ]; then
+        label_color="${ADD_C_PRIDE_BOLD[i % hues]}"
+      else
+        label_color="${ADD_C_PRIDE[i % hues]}"
+      fi
+    fi
     if [ "$i" -eq "$ADD_FOCUS" ]; then
       box_color="$ADD_C_FOCUS"
-      label_color="$ADD_C_FOCUS"
+      [ "$hues" -gt 0 ] && box_color="$label_color"
+      label_color="$box_color"
     fi
     if [ -n "$msg" ]; then
       text_color="$ADD_C_ERR"
