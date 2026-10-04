@@ -143,6 +143,13 @@ day, so it is a smooth dissolve rather than a switch — and on terminals that
 advertise `COLORTERM=truecolor` it is a real per-channel blend instead of the
 six steps a 256-colour palette would band it into.
 
+There is deliberately no way to switch it off while it is June, but
+`SSH_MGR_PRIDE=1` pins it at full strength so you can see it in any other month:
+
+```bash
+SSH_MGR_PRIDE=1 sshmgr -a
+```
+
 `NO_COLOR` turns the whole thing off, menus and preview included.
 
 ### Removing hosts

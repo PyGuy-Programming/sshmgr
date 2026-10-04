@@ -119,9 +119,18 @@ add_colors() {
 # june, and it goes away again a little every day through july rather than all
 # at once, the way a pride logo does. the plain grey theme is what is left when
 # it is gone. only needs date(1), no epoch arithmetic.
+#
+# SSH_MGR_PRIDE=1 pins it at full strength so it can be seen outside june. there
+# is deliberately no way to pin it off: during june it is not optional.
 ADD_PRIDE_FADE_DAYS=30
 add_pride_level() {
   local md m d
+  case "${SSH_MGR_PRIDE:-}" in
+  1 | yes | on | true)
+    printf 1000
+    return
+    ;;
+  esac
   md=$(date '+%m %d') || return 0
   m=${md% *}
   d=${md#* }
@@ -201,8 +210,10 @@ add_pride_rgb() {
 
 # one "label   value" line for the preview, the label in a colour of the flag
 add_info_line() {
-  printf '%s%-10s%s %s%s%s\n' "$(add_hue "$3")" "$1" "$ADD_C_OFF" \
-    "$ADD_C_VALUE" "$2" "$ADD_C_OFF"
+  local hue
+  hue=$(add_hue "$3")
+  printf '%s%-10s%s %s%s%s\n' "$hue" "$1" "$ADD_C_OFF" \
+    "${hue:-$ADD_C_VALUE}" "$2" "$ADD_C_OFF"
 }
 
 # prints the $1th colour of the flag, or nothing when colour is off
@@ -278,7 +289,7 @@ add_repeat() {
 add_form_draw() {
   local size cols inner label_w box_w value msg i key val shown problems status
   local text_color box_color label_color title head_txt tail_txt caret_char
-  local content hues line start room pre post
+  local content hues line start room pre post hint_color
 
   size=$(stty size 2>/dev/null)
   cols=${size##* }
@@ -300,7 +311,7 @@ add_form_draw() {
   title="sshmgr · new host"
   printf '  %s╭─%s %s%s%s %s%s╮\e[K\r\n' \
     "$(add_hue 0)" "$ADD_C_OFF" \
-    "$ADD_C_LABEL" "$title" "$ADD_C_OFF" \
+    "${ADD_C_PRIDE_BOLD[0]:-$ADD_C_LABEL}" "$title" "$ADD_C_OFF" \
     "$(add_rule $((cols - 4 - ${#title} - 3)) ─)"
 
   printf '  %s│%s%s│%s\e[K\r\n' "$(add_hue 0)" "$ADD_C_OFF" \
@@ -317,12 +328,15 @@ add_form_draw() {
     box_color="$ADD_C_FRAME"
     label_color="$ADD_C_LABEL"
     if [ "$hues" -gt 0 ]; then
+      # the whole row is one colour: label, frame, value and placeholder alike
       label_color="$(add_hue "$i")"
       box_color="$label_color"
+      text_color="$label_color"
       # the field being edited is the bold one, so the focus stays obvious
       if [ "$i" -eq "$ADD_FOCUS" ]; then
         label_color="${ADD_C_PRIDE_BOLD[i % hues]}"
         box_color="$label_color"
+        text_color="$label_color"
       fi
     fi
     if [ -n "$msg" ]; then
@@ -331,6 +345,7 @@ add_form_draw() {
     elif [ -z "$val" ]; then
       text_color="$ADD_C_HINT"
       shown="optional"
+      [ "$hues" -gt 0 ] && text_color="$label_color"
     fi
 
     # the caret is drawn as a block on the character it sits on rather than by
@@ -405,8 +420,11 @@ add_form_draw() {
   fi
   printf '  %s╰─%s╯\e[K\r\n' "$(add_hue 5)" "$(add_repeat ─ $((inner - 1)))"
 
-  # the key bindings live outside the box, they are not part of the entry
-  printf '\e[K\r\n  %s%s%s\e[K\r\n' "$ADD_C_HINT" \
+  # the key bindings live outside the box in the last colour of the flag, so that
+  # nothing in the form is left in plain grey
+  hint_color=$(add_hue 5)
+  [ -n "$hint_color" ] || hint_color="$ADD_C_HINT"
+  printf '\e[K\r\n  %s%s%s\e[K\r\n' "$hint_color" \
     "⇥/⇧⇥ field   ← → move   ⌫ delete   ^U clear   ^S save   esc cancel" \
     "$ADD_C_OFF"
 }
