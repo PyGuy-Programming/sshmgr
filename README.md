@@ -128,10 +128,12 @@ Blank fields are left out of the entry, so an empty port keeps the `22` default,
 and names must be unique. The form needs a terminal; in a script (or with
 `NO_COLOR` set) sshmgr falls back to asking for each field on stdin instead.
 
-During June the form wears a small rainbow: one colour of the flag per field,
-and the title rule becomes the stripes. The colours belong to the fields rather
-than cycling, so nothing flickers while typing. Set `SSH_MGR_PRIDE=1` or
-`SSH_MGR_PRIDE=0` to have it any time, and `NO_COLOR` still wins over both.
+The form is drawn in the colours of the rainbow: every field keeps one colour
+of the flag, the field you are editing is the bold version of its own colour,
+the edges of the box run through the same colours from top to bottom, and the
+rule under the title is striped to match. The colours belong to the fields
+rather than cycling, so nothing flickers while typing. The host menu and the
+remove list are painted the same way. `NO_COLOR` turns all of it off.
 
 ### Removing hosts
 

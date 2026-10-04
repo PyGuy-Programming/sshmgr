@@ -74,21 +74,14 @@ add_write() {
 # the field being edited and ADD_CARET the position inside it.
 # --------------------------------------------------------------------------
 
-# the few colours the form needs, skipped entirely when NO_COLOR is set.
-# during june it gets a rainbow instead: one hue per field and a striped rule
-# along the top border. the colours are fixed per field rather than cycling, so
-# nothing flickers while typing.
+# the colours the form needs. every field gets one colour of the rainbow, in
+# the order of the flag, and the title rule is striped to match. the colours
+# belong to the fields instead of cycling, so nothing flickers while typing.
 add_colors() {
   # reverse video is what makes the caret readable; it survives NO_COLOR
   ADD_C_CARET=$'\e[1;7m'
   ADD_C_PRIDE=()
   ADD_C_PRIDE_BOLD=()
-
-  case "${SSH_MGR_PRIDE:-auto}" in
-  0 | no | off) want_pride=0 ;;
-  1 | yes | on) want_pride=1 ;;
-  *) [ "$(date +%m)" = "06" ] && want_pride=1 || want_pride=0 ;;
-  esac
 
   if [ -n "${NO_COLOR:-}" ]; then
     ADD_C_OFF= ADD_C_LABEL= ADD_C_VALUE= ADD_C_FRAME=
@@ -104,20 +97,24 @@ add_colors() {
   ADD_C_ERR=$'\e[1;38;5;203m'
   ADD_C_OK=$'\e[38;5;114m'
   ADD_C_HINT=$'\e[38;5;240m'
-
-  if [ "$want_pride" = "1" ]; then
-    ADD_C_PRIDE=(
-      $'\e[38;5;203m' $'\e[38;5;215m' $'\e[38;5;222m'
-      $'\e[38;5;114m' $'\e[38;5;75m' $'\e[38;5;141m'
-    )
-    ADD_C_PRIDE_BOLD=(
-      $'\e[1;38;5;203m' $'\e[1;38;5;215m' $'\e[1;38;5;222m'
-      $'\e[1;38;5;114m' $'\e[1;38;5;75m' $'\e[1;38;5;141m'
-    )
-  fi
+  ADD_C_PRIDE=(
+    $'\e[38;5;203m' $'\e[38;5;215m' $'\e[38;5;222m'
+    $'\e[38;5;114m' $'\e[38;5;75m' $'\e[38;5;141m'
+  )
+  ADD_C_PRIDE_BOLD=(
+    $'\e[1;38;5;203m' $'\e[1;38;5;215m' $'\e[1;38;5;222m'
+    $'\e[1;38;5;114m' $'\e[1;38;5;75m' $'\e[1;38;5;141m'
+  )
 }
 
-# prints $1 copies of the character $2, but in june as a striped rainbow rule
+# prints the $1th colour of the flag, or nothing when colour is off
+add_hue() {
+  local hues=${#ADD_C_PRIDE[@]}
+  [ "$hues" -gt 0 ] && printf '%s' "${ADD_C_PRIDE[$(( $1 % hues ))]}"
+  return 0
+}
+
+# prints $1 copies of the character $2, but as a striped rainbow rule
 add_rule() {
   local width="$1" segs="${#ADD_C_PRIDE[@]}" i part used=0 out=""
   if [ "$segs" -eq 0 ]; then
@@ -135,6 +132,27 @@ add_rule() {
     out+="${ADD_C_PRIDE_BOLD[i]}$(add_repeat "$2" "$part")$ADD_C_OFF"
   done
   printf '%s' "$out"
+}
+
+# paints every line of stdin with the next colour of the flag, so the fzf menus
+# come out in the same colours as the form. a no-op when colour is off.
+add_rainbow() {
+  local i=0 hue
+  while IFS= read -r line || [ -n "$line" ]; do
+    hue=${#ADD_C_PRIDE[@]}
+    if [ "$hue" -eq 0 ]; then
+      printf '%s\n' "$line"
+    else
+      printf '%s%s%s\n' "${ADD_C_PRIDE[i % hue]}" "$line" "$ADD_C_OFF"
+    fi
+    i=$((i + 1))
+  done
+}
+
+# strips the colour back out of a line, needed wherever fzf hands a painted
+# item back to us for a lookup
+add_uncolour() {
+  sed $'s/\033\\[[0-9;]*m//g'
 }
 
 # prints $1 padded with spaces to $2 characters, cut short with an ellipsis when
@@ -161,7 +179,8 @@ add_repeat() {
 # same column no matter how long the values are.
 add_form_draw() {
   local size cols inner label_w box_w value msg i key val shown problems status
-  local text_color box_color label_color top title head_txt tail_txt caret_char content hues
+  local text_color box_color label_color title head_txt tail_txt caret_char
+  local content hues line start room pre post
 
   size=$(stty size 2>/dev/null)
   cols=${size##* }
@@ -173,20 +192,20 @@ add_form_draw() {
   box_w=$((inner - 16))
   [ "$box_w" -lt 10 ] && box_w=10
   ADD_BOX_W=$box_w
+  hues=${#ADD_C_PRIDE[@]}
 
   problems=$(add_problems "${ADD_VALUES[@]}")
 
+  # the frame lines each take one colour of the flag, so the edges run through
+  # it from top to bottom, and every field row wears the colour of its own field
   printf '\e[H\e[K\r\n'
-
-  # the title is dimmed like the rest of the frame instead of falling back to
-  # the terminal's own foreground, which made the first row stand out
   title="sshmgr · new host"
   printf '  %s╭─%s %s%s%s %s%s╮\e[K\r\n' \
-    "$ADD_C_FRAME" "$ADD_C_OFF" \
+    "$(add_hue 0)" "$ADD_C_OFF" \
     "$ADD_C_LABEL" "$title" "$ADD_C_OFF" \
-    "$ADD_C_FRAME" "$(add_rule $((cols - 4 - ${#title} - 3)) ─)"
+    "$(add_rule $((cols - 4 - ${#title} - 3)) ─)"
 
-  printf '  %s│%s%s│%s\e[K\r\n' "$ADD_C_FRAME" "$ADD_C_OFF" \
+  printf '  %s│%s%s│%s\e[K\r\n' "$(add_hue 0)" "$ADD_C_OFF" \
     "$(add_pad "" "$inner")" "$ADD_C_OFF"
 
   for i in "${!ADD_KEYS[@]}"; do
@@ -199,19 +218,14 @@ add_form_draw() {
     text_color="$ADD_C_VALUE"
     box_color="$ADD_C_FRAME"
     label_color="$ADD_C_LABEL"
-    hues=${#ADD_C_PRIDE[@]}
     if [ "$hues" -gt 0 ]; then
-      # one colour of the flag per field, the focused one in bold
+      label_color="$(add_hue "$i")"
+      box_color="$label_color"
+      # the field being edited is the bold one, so the focus stays obvious
       if [ "$i" -eq "$ADD_FOCUS" ]; then
         label_color="${ADD_C_PRIDE_BOLD[i % hues]}"
-      else
-        label_color="${ADD_C_PRIDE[i % hues]}"
+        box_color="$label_color"
       fi
-    fi
-    if [ "$i" -eq "$ADD_FOCUS" ]; then
-      box_color="$ADD_C_FOCUS"
-      [ "$hues" -gt 0 ] && box_color="$label_color"
-      label_color="$box_color"
     fi
     if [ -n "$msg" ]; then
       text_color="$ADD_C_ERR"
@@ -227,55 +241,76 @@ add_form_draw() {
     # it also fights the terminal's own blinking cursor.
     # only the field being edited gets one, the rest are plain text.
     caret_style=""
+    pre=""
+    post=""
     head_txt="$shown"
     caret_char=""
     tail_txt=""
+
     if [ "$i" -eq "$ADD_FOCUS" ]; then
       caret_style="$ADD_C_CARET"
+      # split around the caret, with the block sitting on the character there
       head_txt=${shown:0:ADD_CARET}
+      tail_txt=""
       if [ "$ADD_CARET" -lt "${#shown}" ]; then
         caret_char=${shown:ADD_CARET:1}
         tail_txt=${shown:ADD_CARET+1}
       else
         caret_char=" "
       fi
-    fi
-    content=$(( ${#head_txt} + ${#caret_char} + ${#tail_txt} ))
 
-    printf '  %s│%s %s%s%s %s[ %s' \
-      "$ADD_C_FRAME" "$ADD_C_OFF" \
+      # whatever does not fit is trimmed, tail first and then the head, so the
+      # caret itself is never the thing that gets cut
+      budget=$((box_w - 1))
+      if [ "${#tail_txt}" -gt "$budget" ]; then
+        tail_txt="${tail_txt:0:budget-1}"
+        post="…"
+        budget=$((budget - 1))
+      fi
+      if [ "${#head_txt}" -gt "$budget" ]; then
+        head_txt="${head_txt:0:budget-1}"
+        pre="…"
+      fi
+    elif [ "${#shown}" -gt "$box_w" ]; then
+      head_txt="${shown:0:$((box_w - 1))}"
+      post="…"
+    fi
+    content=$(( ${#pre} + ${#head_txt} + ${#caret_char} + ${#tail_txt} + ${#post} ))
+
+    printf '  %s│%s %s%s%s %s[ %s%s' \
+      "$box_color" "$ADD_C_OFF" \
       "$label_color" "$(add_pad "$key" "$label_w")" "$ADD_C_OFF" \
-      "$box_color" "$text_color"
+      "$box_color" "$text_color" "$pre"
     printf '%s' "$head_txt"
     printf '%s%s%s' "$caret_style" "$caret_char" "$ADD_C_OFF"
-    printf '%s%s%s' "$text_color" "$tail_txt" "$ADD_C_OFF"
-    printf '%s %s%s]' "$(add_pad "" $((box_w - content)))" "$box_color" "$ADD_C_OFF"
-    printf ' %s│%s\e[K\r\n' "$ADD_C_FRAME" "$ADD_C_OFF"
+    printf '%s%s%s%s' "$text_color" "$tail_txt" "$post" "$ADD_C_OFF"
+    printf ' %s%s]' "$(add_pad "" $((box_w - content)))" "$box_color"
+    printf ' %s│%s\e[K\r\n' "$box_color" "$ADD_C_OFF"
   done
 
-  printf '  %s│%s%s│%s\e[K\r\n' "$ADD_C_FRAME" "$ADD_C_OFF" \
+  # below the fields the frame carries on with the colours the flag has left
+  printf '  %s│%s%s│%s\e[K\r\n' "$(add_hue 4)" "$ADD_C_OFF" \
     "$(add_pad "" "$inner")" "$ADD_C_OFF"
-  printf '  %s├─%s╮\e[K\r\n' "$ADD_C_FRAME" "$(add_repeat ─ $((inner - 1)))"
+  printf '  %s├─%s╮\e[K\r\n' "$(add_hue 5)" "$(add_repeat ─ $((inner - 1)))"
 
   status=$(jq -r 'to_entries | map(.value) | first // ""' <<<"$problems")
   if [ -n "$status" ]; then
     printf '  %s│%s %s%s%s %s│%s\e[K\r\n' \
-      "$ADD_C_FRAME" "$ADD_C_OFF" "$ADD_C_ERR" \
+      "$(add_hue 5)" "$ADD_C_OFF" "$ADD_C_ERR" \
       "$(add_pad "! $status" $((inner - 2)))" "$ADD_C_OFF" \
-      "$ADD_C_FRAME" "$ADD_C_OFF"
+      "$(add_hue 5)" "$ADD_C_OFF"
   else
     printf '  %s│%s %s%s%s %s│%s\e[K\r\n' \
-      "$ADD_C_FRAME" "$ADD_C_OFF" "$ADD_C_OK" \
+      "$(add_hue 5)" "$ADD_C_OFF" "$ADD_C_OK" \
       "$(add_pad "✓ complete, ^S writes the entry" $((inner - 2)))" "$ADD_C_OFF" \
-      "$ADD_C_FRAME" "$ADD_C_OFF"
+      "$(add_hue 5)" "$ADD_C_OFF"
   fi
-  printf '  %s╰─%s╯\e[K\r\n' "$ADD_C_FRAME" "$(add_repeat ─ $((inner - 1)))"
+  printf '  %s╰─%s╯\e[K\r\n' "$(add_hue 5)" "$(add_repeat ─ $((inner - 1)))"
 
   # the key bindings live outside the box, they are not part of the entry
   printf '\e[K\r\n  %s%s%s\e[K\r\n' "$ADD_C_HINT" \
     "⇥/⇧⇥ field   ← → move   ⌫ delete   ^U clear   ^S save   esc cancel" \
     "$ADD_C_OFF"
-
 }
 
 # reads keys until the entry is saved or the form is cancelled.
@@ -419,16 +454,19 @@ remove_hosts() {
 # picks the hosts to remove in fzf, with the same preview the menu uses
 remove_pick() {
   local picked
+  add_colors
   picked=$(jq -r '.hosts[].name' "$HOSTS_FILE" |
-    fzf --multi --no-sort \
+    add_rainbow |
+    fzf --ansi --multi --no-sort \
       --border=rounded \
-      --border-label=" sshmgr · remove hosts · ⇥ select · ⏎ remove · esc cancel " \
-      --prompt="remove › " \
+      --border-label=" ${ADD_C_PRIDE_BOLD[0]}sshmgr${ADD_C_OFF} ${ADD_C_LABEL}· remove hosts${ADD_C_OFF} ${ADD_C_LABEL}· ⇥ select · ⏎ remove · esc cancel${ADD_C_OFF} " \
+      --prompt="${ADD_C_PRIDE_BOLD[1]}remove${ADD_C_OFF} ${ADD_C_PRIDE_BOLD[2]}>${ADD_C_OFF} " \
+      --color="hl:33" \
       --bind='tab:toggle+up' \
       --preview="\"$0\" __info {}" \
       --preview-window='right:32' ) || return 0
 
-  remove_hosts "$picked"
+  remove_hosts "$(printf '%s' "$picked" | add_uncolour)"
 }
 
 # asks for every field on stdin, used when there is no terminal to draw on
@@ -536,8 +574,18 @@ USAGE
   # starting selection of known hosts if no option is given
   # the fzf preview calls this script itself with __info (see case below)
   echo "opening known host selection..."
+  add_colors
   selected=$(jq -r '.hosts[] | "\(.name)"' "$HOSTS_FILE" |
-    fzf --prompt="SSH > " --preview="\"$0\" __info {}")
+    add_rainbow |
+    fzf --ansi --no-sort \
+      --border=rounded \
+      --border-label=" ${ADD_C_PRIDE_BOLD[0]}sshmgr${ADD_C_OFF} ${ADD_C_LABEL}· pick a host${ADD_C_OFF} " \
+      --prompt="${ADD_C_PRIDE_BOLD[1]}SSH${ADD_C_OFF} ${ADD_C_PRIDE_BOLD[2]}>${ADD_C_OFF} " \
+      --color="hl:33" \
+      --preview="\"$0\" __info {}")
+
+  # fzf hands the colour back with the name, and the lookup needs it plain
+  selected=$(printf '%s' "$selected" | add_uncolour)
 
   [[ -z "$selected" ]] && exit 0
 
@@ -587,17 +635,19 @@ USAGE
   "${ssh_cmd[@]}" "${ssh_args[@]}" "$dest"
   ;;
 __info)
-  # internal: called by the fzf preview, shows status + details
-  info_host=$(jq -r --arg name "$2" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
+  # internal: called by the fzf preview, shows status + details.
+  # fzf passes the item as painted, so the name arrives with colour on it
+  name=$(printf '%s' "$2" | add_uncolour)
+  info_host=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
 
   if command -v fping >/dev/null 2>&1; then
     timeout 2 fping -c1 "$info_host" >/dev/null 2>&1 && echo "● online" || echo "○ offline"
     echo
   fi
 
-  jq -r --arg name "$2" '.hosts[] | select(.name == $name) |
+  jq -r --arg name "$name" '.hosts[] | select(.name == $name) |
     "User:     \(.user)\nHost:     \(.host)\nPort:     \(.port // "?")\nJumphost: \(.jumphost | if . == null or . == "" then "-" else . end)"' "$HOSTS_FILE"
-  if [ -z "$(jq -r --arg name "$2" '.hosts[] | select(.name == $name) | .name' "$HOSTS_FILE")" ]; then
+  if [ -z "$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .name' "$HOSTS_FILE")" ]; then
     echo "(host not found)"
   fi
   ;;
