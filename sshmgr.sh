@@ -2,9 +2,14 @@
 
 HOSTS_FILE="$HOME/.config/sshmgr/known_hosts.json"
 
+if ! command -v jq >/dev/null 2>&1; then
+  echo "error: jq is required" >&2
+  exit 1
+fi
+
 if [ ! -f "$HOSTS_FILE" ]; then
   mkdir -p "$(dirname "$HOSTS_FILE")"
-  cat <<'DEFAULT' >"$HOSTS_FILE"
+  cat << 'DEFAULT' > "$HOSTS_FILE"
 {
   "hosts": []
 }
@@ -13,7 +18,32 @@ DEFAULT
   echo "add your hosts there and run sshmgr again"
   exit 0
 fi
-jq -e '.hosts' "$HOSTS_FILE" >/dev/null 2>&1 || {
+jq -e '
+  def optional_string($key):
+    if has($key) and .[$key] != null
+    then (.[$key] | type == "string")
+    else true
+    end;
+  def valid_port:
+    (if has("port") and .port != null then .port else "" end)
+    | if type != "string" then false
+      elif . == "" then true
+      elif (test("^[0-9]+$") | not) then false
+      else (tonumber >= 1 and tonumber <= 65535)
+      end;
+  type == "object"
+  and (.hosts? | type) == "array"
+  and all(.hosts[];
+    type == "object"
+    and (.name | type) == "string"
+    and (.name | length) > 0
+    and (.host | type) == "string"
+    and (.host | length) > 0
+    and optional_string("user")
+    and optional_string("jumphost")
+    and valid_port)
+  and ([.hosts[].name] | length == (unique | length))
+' "$HOSTS_FILE" >/dev/null 2>&1 || {
   echo "invalid json"
   exit 1
 }
@@ -58,13 +88,21 @@ add_problems() {
 add_write() {
   local tmp="${HOSTS_FILE}.tmp.$$"
 
-  jq --arg name "${1:-}" --arg host "${2:-}" --arg user "${3:-}" \
+  if ! jq --arg name "${1:-}" --arg host "${2:-}" --arg user "${3:-}" \
     --arg port "${4:-}" --arg jumphost "${5:-}" '
       .hosts += [{name: $name, host: $host}
                  + (if $user     == "" then {} else {user: $user} end)
                  + (if $port     == "" then {} else {port: $port} end)
                  + (if $jumphost == "" then {} else {jumphost: $jumphost} end)]
-    ' "$HOSTS_FILE" >"$tmp" && mv "$tmp" "$HOSTS_FILE"
+    ' "$HOSTS_FILE" > "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+
+  if ! mv "$tmp" "$HOSTS_FILE"; then
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 # --------------------------------------------------------------------------
@@ -84,8 +122,13 @@ add_colors() {
   ADD_C_PRIDE_BOLD=()
 
   if [ -n "${NO_COLOR:-}" ]; then
-    ADD_C_OFF= ADD_C_LABEL= ADD_C_VALUE= ADD_C_FRAME=
-    ADD_C_FOCUS= ADD_C_ERR= ADD_C_OK= ADD_C_HINT=
+    ADD_C_OFF=''
+    ADD_C_LABEL=''
+    ADD_C_VALUE=''
+    ADD_C_FRAME=''
+    ADD_C_ERR=''
+    ADD_C_OK=''
+    ADD_C_HINT=''
     return
   fi
 
@@ -93,14 +136,13 @@ add_colors() {
   ADD_C_LABEL=$'\e[38;5;244m'
   ADD_C_VALUE=$'\e[38;5;252m'
   ADD_C_FRAME=$'\e[38;5;238m'
-  ADD_C_FOCUS=$'\e[1;38;5;117m'
   ADD_C_ERR=$'\e[1;38;5;203m'
   ADD_C_OK=$'\e[38;5;114m'
   ADD_C_HINT=$'\e[38;5;240m'
   # does this terminal do 24 bit colour? without it the fade bands badly
   ADD_C_TRUE=0
   case "${COLORTERM:-}" in
-  truecolor | 24bit) ADD_C_TRUE=1 ;;
+    truecolor | 24bit) ADD_C_TRUE=1 ;;
   esac
 
   # the flag is at full strength in june and fades out day by day afterwards
@@ -126,18 +168,18 @@ ADD_PRIDE_FADE_DAYS=30
 add_pride_level() {
   local md m d
   case "${SSH_MGR_PRIDE:-}" in
-  1 | yes | on | true)
-    printf 1000
-    return
-    ;;
+    1 | yes | on | true)
+      printf 1000
+      return
+      ;;
   esac
   md=$(date '+%m %d') || return 0
   m=${md% *}
   d=${md#* }
   case "$m" in
-  06) printf 1000 ;;
-  07) printf '%s' $((1000 * (ADD_PRIDE_FADE_DAYS - 10#$d) / ADD_PRIDE_FADE_DAYS)) ;;
-  *) printf 0 ;;
+    06) printf 1000 ;;
+    07) printf '%s' $((1000 * (ADD_PRIDE_FADE_DAYS - 10#$d) / ADD_PRIDE_FADE_DAYS)) ;;
+    *) printf 0 ;;
   esac
 }
 
@@ -175,9 +217,9 @@ add_rgb256() {
   bi=$ADD_NEAREST
   idx=$((16 + 36 * ri + 6 * gi + bi))
 
-  dcube=$(((ADD_CUBE[ri] - r) * (ADD_CUBE[ri] - r)
-    + (ADD_CUBE[gi] - g) * (ADD_CUBE[gi] - g)
-    + (ADD_CUBE[bi] - b) * (ADD_CUBE[bi] - b)))
+  dcube=$(((ADD_CUBE[ri] - r) * (ADD_CUBE[ri] - r) + (\
+    ADD_CUBE[gi] - g) * (ADD_CUBE[gi] - g) + (\
+    ADD_CUBE[bi] - b) * (ADD_CUBE[bi] - b)))
 
   # the error has to be measured the same way for both candidates, so the grey
   # is compared against all three channels too, not just their average
@@ -219,7 +261,7 @@ add_info_line() {
 # prints the $1th colour of the flag, or nothing when colour is off
 add_hue() {
   local hues=${#ADD_C_PRIDE[@]}
-  [ "$hues" -gt 0 ] && printf '%s' "${ADD_C_PRIDE[$(( $1 % hues ))]}"
+  [ "$hues" -gt 0 ] && printf '%s' "${ADD_C_PRIDE[$(($1 % hues))]}"
   return 0
 }
 
@@ -268,6 +310,7 @@ add_uncolour() {
 # it does not fit, so a long value can never push the frame out of shape
 add_pad() {
   local s="$1" n="$2" out
+  [ "$n" -le 0 ] && return 0
   if [ "${#s}" -gt "$n" ]; then
     printf '%s…' "${s:0:n-1}"
     return
@@ -279,6 +322,7 @@ add_pad() {
 # prints $2 copies of the character $1
 add_repeat() {
   local out
+  [ "$2" -le 0 ] && return 0
   printf -v out '%*s' "$2" ''
   printf '%s' "${out// /$1}"
 }
@@ -287,15 +331,22 @@ add_repeat() {
 # the frame is inner = width - 4 characters wide, so every line ends on the
 # same column no matter how long the values are.
 add_form_draw() {
-  local size cols inner label_w box_w value msg i key val shown problems status
+  local size rows cols inner label_w box_w msg i key val shown problems status
   local text_color box_color label_color title head_txt tail_txt caret_char
-  local content hues line start room pre post hint_color
+  local content hues pre post hint_color
 
-  size=$(stty size 2>/dev/null)
+  size=$(stty size 2> /dev/null)
+  rows=${size%% *}
   cols=${size##* }
-  case "$cols" in
-  '' | *[!0-9]*) cols=80 ;;
+  case "$rows" in
+    '' | *[!0-9]*) rows=24 ;;
   esac
+  case "$cols" in
+    '' | *[!0-9]*) cols=80 ;;
+  esac
+  [ "$rows" -lt 1 ] && rows=24
+  [ "$cols" -lt 40 ] && cols=80
+  ADD_LINES=$rows
   inner=$((cols - 4))
   label_w=9
   box_w=$((inner - 16))
@@ -309,7 +360,7 @@ add_form_draw() {
   # it from top to bottom, and every field row wears the colour of its own field
   printf '\e[H\e[K\r\n'
   title="sshmgr · new host"
-  printf '  %s╭─%s %s%s%s %s%s╮\e[K\r\n' \
+  printf '  %s╭─%s %s%s%s %s╮\e[K\r\n' \
     "$(add_hue 0)" "$ADD_C_OFF" \
     "${ADD_C_PRIDE_BOLD[0]:-$ADD_C_LABEL}" "$title" "$ADD_C_OFF" \
     "$(add_rule $((cols - 4 - ${#title} - 3)) ─)"
@@ -320,7 +371,7 @@ add_form_draw() {
   for i in "${!ADD_KEYS[@]}"; do
     key="${ADD_KEYS[$i]}"
     val="${ADD_VALUES[$i]}"
-    msg=$(jq -r --arg k "$key" '.[$k] // ""' <<<"$problems")
+    msg=$(jq -r --arg k "$key" '.[$k] // ""' <<< "$problems")
 
     # an empty field shows what it wants, a broken one shows why it is broken
     shown="$val"
@@ -388,7 +439,7 @@ add_form_draw() {
       head_txt="${shown:0:$((box_w - 1))}"
       post="…"
     fi
-    content=$(( ${#pre} + ${#head_txt} + ${#caret_char} + ${#tail_txt} + ${#post} ))
+    content=$((${#pre} + ${#head_txt} + ${#caret_char} + ${#tail_txt} + ${#post}))
 
     printf '  %s│%s %s%s%s %s[ %s%s' \
       "$box_color" "$ADD_C_OFF" \
@@ -406,7 +457,7 @@ add_form_draw() {
     "$(add_pad "" "$inner")" "$ADD_C_OFF"
   printf '  %s├─%s╮\e[K\r\n' "$(add_hue 5)" "$(add_repeat ─ $((inner - 1)))"
 
-  status=$(jq -r 'to_entries | map(.value) | first // ""' <<<"$problems")
+  status=$(jq -r 'to_entries | map(.value) | first // ""' <<< "$problems")
   if [ -n "$status" ]; then
     printf '  %s│%s %s%s%s %s│%s\e[K\r\n' \
       "$(add_hue 5)" "$ADD_C_OFF" "$ADD_C_ERR" \
@@ -440,7 +491,7 @@ add_form() {
   prev_focus=0
   add_colors
 
-  stty raw -echo 2>/dev/null
+  stty raw -echo 2> /dev/null
   # whatever happens, leave the terminal the way we found it
   trap 'stty sane 2>/dev/null; printf "\e[?25h"' EXIT
   # a signal means the user is done here; ^C is also read as a plain byte
@@ -452,46 +503,69 @@ add_form() {
     IFS= read -rsn1 key || break
 
     if [ "$key" = $'\e' ]; then
-      # an escape sequence arrives as several bytes; a lone escape means cancel
+      # an escape sequence arrives as several bytes; read only that sequence so
+      # a key pressed immediately afterwards is not swallowed with it
       seq=""
-      while IFS= read -rsn1 -t 0.02 ch; do
+      if IFS= read -rsn1 -t 0.1 ch; then
         seq+="$ch"
-      done
+        case "$ch" in
+          '[')
+            while IFS= read -rsn1 -t 0.1 ch; do
+              seq+="$ch"
+              [[ "$ch" == [@-~] ]] && break
+            done
+            ;;
+          O)
+            IFS= read -rsn1 -t 0.1 ch && seq+="$ch"
+            ;;
+        esac
+      fi
       case "$seq" in
-      '[C' | 'OC') ADD_CARET=$((ADD_CARET + 1)) ;;
-      '[D' | 'OD') ADD_CARET=$((ADD_CARET - 1)) ;;
-      '[H' | 'OH' | '[1~' | '7~') ADD_CARET=0 ;;
-      '[F' | 'OF' | '[4~' | '8~') ADD_CARET=${#ADD_VALUES[$ADD_FOCUS]} ;;
-      '[A' | 'OA') ADD_FOCUS=$((ADD_FOCUS - 1)) ;;
-      '[B' | 'OB') ADD_FOCUS=$((ADD_FOCUS + 1)) ;;
-      '[Z') ADD_FOCUS=$((ADD_FOCUS - 1)) ;;
-      '') ADD_SAVED=0; break ;;
-      *) ;;
+        '[C' | 'OC') ADD_CARET=$((ADD_CARET + 1)) ;;
+        '[D' | 'OD') ADD_CARET=$((ADD_CARET - 1)) ;;
+        '[H' | 'OH' | '[1~' | '7~') ADD_CARET=0 ;;
+        '[F' | 'OF' | '[4~' | '8~') ADD_CARET=${#ADD_VALUES[$ADD_FOCUS]} ;;
+        '[A' | 'OA') ADD_FOCUS=$((ADD_FOCUS - 1)) ;;
+        '[B' | 'OB') ADD_FOCUS=$((ADD_FOCUS + 1)) ;;
+        '[Z') ADD_FOCUS=$((ADD_FOCUS - 1)) ;;
+        '[3~')
+          local v=${ADD_VALUES[ADD_FOCUS]}
+          if [ "$ADD_CARET" -lt "${#v}" ]; then
+            ADD_VALUES[ADD_FOCUS]=${v:0:ADD_CARET}${v:ADD_CARET+1}
+          fi
+          ;;
+        '')
+          ADD_SAVED=0
+          break
+          ;;
+        *) ;;
       esac
     else
       case "$key" in
-      $'\t' | $'\r' | $'\n') ADD_FOCUS=$((ADD_FOCUS + 1)) ;;
-      $'\x7f' | $'\b')
-        [ "$ADD_CARET" -gt 0 ] && ADD_VALUES[$ADD_FOCUS]=${ADD_VALUES[$ADD_FOCUS]:0:ADD_CARET-1}${ADD_VALUES[$ADD_FOCUS]:ADD_CARET}
-        ;;
-      $'\x1b[3~')
-        local v=${ADD_VALUES[$ADD_FOCUS]}
-        ADD_VALUES[$ADD_FOCUS]=${v:0:ADD_CARET}${v:ADD_CARET+1}
-        ;;
-      $'\x01') ADD_CARET=0 ;;
-      $'\x05') ADD_CARET=${#ADD_VALUES[$ADD_FOCUS]} ;;
-      $'\x15') ADD_VALUES[$ADD_FOCUS]='' ;;
-      $'\x03') ADD_SAVED=0; break ;;
-      $'\x13' | $'\x04') break ;;
-      *)
-        # everything printable goes into the box, which also rebuilds
-        # multibyte characters from their bytes one at a time
-        if [ "$(printf '%d' "'$key")" -ge 32 ]; then
-          local v=${ADD_VALUES[$ADD_FOCUS]}
-          ADD_VALUES[$ADD_FOCUS]=${v:0:ADD_CARET}${key}${v:ADD_CARET}
-          ADD_CARET=$((ADD_CARET + 1))
-        fi
-        ;;
+        $'\t' | $'\r' | $'\n') ADD_FOCUS=$((ADD_FOCUS + 1)) ;;
+        $'\x7f' | $'\b')
+          if [ "$ADD_CARET" -gt 0 ]; then
+            ADD_VALUES[ADD_FOCUS]=${ADD_VALUES[ADD_FOCUS]:0:ADD_CARET-1}${ADD_VALUES[ADD_FOCUS]:ADD_CARET}
+            ADD_CARET=$((ADD_CARET - 1))
+          fi
+          ;;
+        $'\x01') ADD_CARET=0 ;;
+        $'\x05') ADD_CARET=${#ADD_VALUES[$ADD_FOCUS]} ;;
+        $'\x15') ADD_VALUES[ADD_FOCUS]='' ;;
+        $'\x03')
+          ADD_SAVED=0
+          break
+          ;;
+        $'\x13' | $'\x04') break ;;
+        *)
+          # everything printable goes into the box, which also rebuilds
+          # multibyte characters from their bytes one at a time
+          if [ "$(printf '%d' "'$key")" -ge 32 ]; then
+            local v=${ADD_VALUES[ADD_FOCUS]}
+            ADD_VALUES[ADD_FOCUS]=${v:0:ADD_CARET}${key}${v:ADD_CARET}
+            ADD_CARET=$((ADD_CARET + 1))
+          fi
+          ;;
       esac
     fi
 
@@ -512,8 +586,8 @@ add_form() {
   done
 
   trap - EXIT INT TERM
-  stty sane 2>/dev/null
-  printf '\e[?25h\e[%d;1H\r\n' "$LINES"
+  stty sane 2> /dev/null
+  printf '\e[?25h\e[%d;1H\r\n' "${ADD_LINES:-24}"
 
   if [ "$ADD_SAVED" = "0" ]; then
     echo "cancelled, nothing was written"
@@ -538,7 +612,10 @@ add_form() {
 # removes every host named in $1, one name per line
 remove_hosts() {
   local wanted="$1" tmp missing count
-  [ -z "$wanted" ] && return 0
+  if [ -z "$wanted" ]; then
+    echo "error: a host name is required" >&2
+    return 1
+  fi
 
   # refuse to do nothing quietly, a typo should be reported
   missing=$(jq -r --arg names "$wanted" '
@@ -552,42 +629,52 @@ remove_hosts() {
   fi
 
   tmp="${HOSTS_FILE}.tmp.$$"
-  if jq --arg names "$wanted" '
+  if ! jq --arg names "$wanted" '
         ($names | split("\n") | map(select(length > 0))) as $want
         | .hosts |= map(select(.name as $n | ($want | index($n)) == null))
-      ' "$HOSTS_FILE" >"$tmp"; then
-    mv "$tmp" "$HOSTS_FILE"
-    count=$(jq --arg names "$wanted" '
-      ($names | split("\n") | map(select(length > 0)) | unique) | length' "$HOSTS_FILE")
-    echo "removed $count host(s) from $HOSTS_FILE"
-  else
+      ' "$HOSTS_FILE" > "$tmp"; then
     rm -f "$tmp"
     echo "error: could not write $HOSTS_FILE"
     return 1
   fi
+
+  if ! mv "$tmp" "$HOSTS_FILE"; then
+    rm -f "$tmp"
+    echo "error: could not write $HOSTS_FILE"
+    return 1
+  fi
+
+  count=$(jq --arg names "$wanted" '
+    ($names | split("\n") | map(select(length > 0)) | unique) | length' "$HOSTS_FILE")
+  echo "removed $count host(s) from $HOSTS_FILE"
 }
 
 # picks the hosts to remove in fzf, with the same preview the menu uses
 remove_pick() {
   local picked
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "error: fzf is required for interactive removal" >&2
+    return 1
+  fi
   add_colors
-  picked=$(jq -r '.hosts[].name' "$HOSTS_FILE" |
-    add_rainbow |
-    fzf --ansi --multi --no-sort \
+  picked=$(jq -r '.hosts[].name' "$HOSTS_FILE" \
+    | add_rainbow \
+    | fzf --ansi --multi --no-sort \
       --border=rounded \
       --border-label=" ${ADD_C_PRIDE_BOLD[0]}sshmgr${ADD_C_OFF} ${ADD_C_LABEL}· remove hosts${ADD_C_OFF} ${ADD_C_LABEL}· ⇥ select · ⏎ remove · esc cancel${ADD_C_OFF} " \
       --prompt="${ADD_C_PRIDE_BOLD[1]}remove${ADD_C_OFF} ${ADD_C_PRIDE_BOLD[2]}>${ADD_C_OFF} " \
       --color="hl:33" \
       --bind='tab:toggle+up' \
       --preview="\"$0\" __info {}" \
-      --preview-window='right:32' ) || return 0
+      --preview-window='right:32') || return 0
 
+  [ -z "$picked" ] && return 0
   remove_hosts "$(printf '%s' "$picked" | add_uncolour)"
 }
 
 # asks for every field on stdin, used when there is no terminal to draw on
 add_prompt() {
-  local name="${1:-}" host="${2:-}" user="${3:-}" port="${4:-}" jumphost="${5:-}"
+  local name host user port jumphost
 
   read -r -p "name: ${name}" name
   read -r -p "host: ${host}" host
@@ -596,61 +683,93 @@ add_prompt() {
   read -r -p "jumphost (optional): ${jumphost}" jumphost
 
   if [ "$(add_problems "$name" "$host" "$user" "$port" "$jumphost" | jq -r 'length')" != "0" ]; then
-    add_problems "$name" "$host" "$user" "$port" "$jumphost" |
-      jq -r 'to_entries[] | "error: " + .key + ": " + .value'
+    add_problems "$name" "$host" "$user" "$port" "$jumphost" \
+      | jq -r 'to_entries[] | "error: " + .key + ": " + .value'
     return 1
   fi
 
   add_write "$name" "$host" "$user" "$port" "$jumphost"
 }
 
-case "$1" in
--e | --edit)
-# runs when $1 is "-e" or "--edit"
-  echo "opening known hosts file with nano..."
-  $EDITOR "$HOSTS_FILE"
-  ;;
--p | --ping)
-  # ping all known hosts in parallel with fping
-  echo "checking all hosts..."
-  # intentionally unquoted: word splitting is wanted here (host addresses contain no spaces)
-  fping $(jq -r '.hosts[].host' "$HOSTS_FILE") 2>&1
-  ;;
--a | --add)
-  # with arguments the entry is written straight away, without any prompt.
-  # without them the form is opened when there is a terminal to draw it on,
-  # and plain readline questions otherwise.
-  if [ -n "${2:-}" ]; then
-    if [ "$(add_problems "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" | jq -r 'length')" != "0" ]; then
-      add_problems "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" |
-        jq -r 'to_entries[] | "error: " + .key + ": " + .value'
-      exit 1
-    fi
+edit_hosts() {
+  local -a editor_cmd=()
 
-    if ! add_write "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"; then
-      echo "error: could not write $HOSTS_FILE"
+  if [ -z "${EDITOR:-}" ]; then
+    echo "error: EDITOR is not set; set it before using --edit" >&2
+    return 1
+  fi
+
+  read -r -a editor_cmd <<< "$EDITOR"
+  if [ "${#editor_cmd[@]}" -eq 0 ] || ! command -v "${editor_cmd[0]}" >/dev/null 2>&1; then
+    echo "error: editor command '${editor_cmd[0]:-}' was not found" >&2
+    return 1
+  fi
+
+  "${editor_cmd[@]}" "$HOSTS_FILE"
+}
+
+case "$1" in
+  -e | --edit)
+    edit_hosts
+    ;;
+  -p | --ping)
+    # ping all known hosts in parallel with fping
+    mapfile -t ping_hosts < <(jq -r '.hosts[].host' "$HOSTS_FILE")
+    if [ "${#ping_hosts[@]}" -eq 0 ]; then
+      echo "no hosts configured"
+      exit 0
+    fi
+    if ! command -v fping >/dev/null 2>&1; then
+      echo "error: fping is required for --ping" >&2
       exit 1
     fi
-    echo "added '${2}' to $HOSTS_FILE"
-  elif [ -t 1 ]; then
-    add_form
-  else
-    add_prompt
-  fi
-  ;;
--r | --remove)
-  # with names as arguments they are removed right away, without a prompt.
-  # without them the hosts are picked in fzf.
-  if [ -n "${2:-}" ]; then
-    shift
-    remove_hosts "$(printf '%s\n' "$@")"
-  else
-    remove_pick
-  fi
-  ;;
--h | --help)
-  # printing help/usage information
-  cat <<'USAGE'
+    echo "checking all hosts..."
+    fping "${ping_hosts[@]}" 2>&1
+    ;;
+  -a | --add)
+    # with arguments the entry is written straight away, without any prompt.
+    # without them the form is opened when there is a terminal to draw it on,
+    # and plain readline questions otherwise.
+    if [ "$#" -gt 6 ]; then
+      echo "error: too many arguments for --add" >&2
+      exit 2
+    elif [ "$#" -gt 1 ]; then
+      if [ "$(add_problems "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" | jq -r 'length')" != "0" ]; then
+        add_problems "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" \
+          | jq -r 'to_entries[] | "error: " + .key + ": " + .value'
+        exit 1
+      fi
+
+      if ! add_write "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"; then
+        echo "error: could not write $HOSTS_FILE"
+        exit 1
+      fi
+      echo "added '${2}' to $HOSTS_FILE"
+    elif [ -t 0 ] && [ -t 1 ]; then
+      add_form
+    else
+      add_prompt
+    fi
+    ;;
+  -r | --remove)
+    # with names as arguments they are removed right away, without a prompt.
+    # without them the hosts are picked in fzf.
+    if [ "$#" -gt 1 ]; then
+      for host_name in "${@:2}"; do
+        if [ -z "$host_name" ]; then
+          echo "error: a host name is required" >&2
+          exit 1
+        fi
+      done
+      shift
+      remove_hosts "$(printf '%s\n' "$@")"
+    else
+      remove_pick
+    fi
+    ;;
+  -h | --help)
+    # printing help/usage information
+    cat << 'USAGE'
 sshmgr - connect to your hosts without typing ssh commands
 
 usage:
@@ -685,104 +804,109 @@ examples:
 
 run 'man sshmgr' for the full manual.
 USAGE
-  ;;
-"")
-  # starting selection of known hosts if no option is given
-  # the fzf preview calls this script itself with __info (see case below)
-  echo "opening known host selection..."
-  add_colors
-  selected=$(jq -r '.hosts[] | "\(.name)"' "$HOSTS_FILE" |
-    add_rainbow |
-    fzf --ansi --no-sort \
-      --border=rounded \
-      --border-label=" ${ADD_C_PRIDE_BOLD[0]}sshmgr${ADD_C_OFF} ${ADD_C_LABEL}· pick a host${ADD_C_OFF} " \
-      --prompt="${ADD_C_PRIDE_BOLD[1]}SSH${ADD_C_OFF} ${ADD_C_PRIDE_BOLD[2]}>${ADD_C_OFF} " \
-      --color="hl:33" \
-      --preview="\"$0\" __info {}")
-
-  # fzf hands the colour back with the name, and the lookup needs it plain
-  selected=$(printf '%s' "$selected" | add_uncolour)
-
-  [[ -z "$selected" ]] && exit 0
-
-  host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host // empty' "$HOSTS_FILE")
-  user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user // empty' "$HOSTS_FILE")
-  port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port // empty' "$HOSTS_FILE")
-  jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost // empty' "$HOSTS_FILE")
-
-  # defaults for optional fields (// empty above already maps missing/null -> "")
-  [[ -z "$port" ]] && port="22"
-
-  if ! [[ "$port" =~ ^[0-9]+$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
-    echo "error: invalid port '$port' for '$selected'"
-    exit 1
-  fi
-
-  if [ -z "$host" ]; then
-    echo "error: no host address found for '$selected'"
-    exit 1
-  fi
-
-  if [ -n "$user" ]; then
-    dest="$user@$host"
-  else
-    dest="$host"
-  fi
-
-  # try connecting to the selected host
-  # the ssh kitten is a drop-in replacement for ssh, but it only works inside kitty
-  ssh_cmd=(ssh)
-  if [ "$kitten_ssh" = "true" ]; then
-    if [ -n "$KITTY_WINDOW_ID" ] && command -v kitten >/dev/null 2>&1; then
-      ssh_cmd=(kitten ssh)
-    else
-      echo "note: kitten_ssh is enabled, but kitten is unavailable here. falling back to ssh"
+    ;;
+  "")
+    # starting selection of known hosts if no option is given
+    # the fzf preview calls this script itself with __info (see case below)
+    if ! command -v fzf >/dev/null 2>&1; then
+      echo "error: fzf is required for host selection" >&2
+      exit 1
     fi
-  fi
+    echo "opening known host selection..."
+    add_colors
+    selected=$(jq -r '.hosts[] | "\(.name)"' "$HOSTS_FILE" \
+      | add_rainbow \
+      | fzf --ansi --no-sort \
+        --border=rounded \
+        --border-label=" ${ADD_C_PRIDE_BOLD[0]}sshmgr${ADD_C_OFF} ${ADD_C_LABEL}· pick a host${ADD_C_OFF} " \
+        --prompt="${ADD_C_PRIDE_BOLD[1]}SSH${ADD_C_OFF} ${ADD_C_PRIDE_BOLD[2]}>${ADD_C_OFF} " \
+        --color="hl:33" \
+        --preview="\"$0\" __info {}")
 
-  ssh_args=(-p "$port")
-  if [ -n "$jumphost" ]; then
-    ssh_args+=(-J "$jumphost")
-    echo "Connecting to $selected ($dest) using $jumphost as jumphost"
-  else
-    echo "Connecting to $selected ($dest)..."
-  fi
+    # fzf hands the colour back with the name, and the lookup needs it plain
+    selected=$(printf '%s' "$selected" | add_uncolour)
 
-  "${ssh_cmd[@]}" "${ssh_args[@]}" "$dest"
-  ;;
-__info)
-  # internal: called by the fzf preview, shows status + details.
-  # fzf passes the item as painted, so the name arrives with colour on it
-  name=$(printf '%s' "$2" | add_uncolour)
-  add_colors
-  info_host=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
+    [[ -z $selected ]] && exit 0
 
-  # the status is coloured by what it means, the details by the flag
-  if command -v fping >/dev/null 2>&1; then
-    if timeout 2 fping -c1 "$info_host" >/dev/null 2>&1; then
-      printf '%s● online%s\n' "$ADD_C_OK" "$ADD_C_OFF"
-    else
-      printf '%s○ offline%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
+    host=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .host // empty' "$HOSTS_FILE")
+    user=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .user // empty' "$HOSTS_FILE")
+    port=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .port // empty' "$HOSTS_FILE")
+    jumphost=$(jq -r --arg name "$selected" '.hosts[] | select(.name == $name) | .jumphost // empty' "$HOSTS_FILE")
+
+    # defaults for optional fields (// empty above already maps missing/null -> "")
+    [[ -z $port ]] && port="22"
+
+    if ! [[ $port =~ ^[0-9]+$ ]] || ((10#$port < 1 || 10#$port > 65535)); then
+      echo "error: invalid port '$port' for '$selected'"
+      exit 1
     fi
-    echo
-  fi
 
-  info=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) |
-    [ (.user // ""), .host, (.port // "?"),
+    if [ -z "$host" ]; then
+      echo "error: no host address found for '$selected'"
+      exit 1
+    fi
+
+    if [ -n "$user" ]; then
+      dest="$user@$host"
+    else
+      dest="$host"
+    fi
+
+    # try connecting to the selected host
+    # the ssh kitten is a drop-in replacement for ssh, but it only works inside kitty
+    ssh_cmd=(ssh)
+    if [ "$kitten_ssh" = "true" ]; then
+      if [ -n "$KITTY_WINDOW_ID" ] && command -v kitten > /dev/null 2>&1; then
+        ssh_cmd=(kitten ssh)
+      else
+        echo "note: kitten_ssh is enabled, but kitten is unavailable here. falling back to ssh"
+      fi
+    fi
+
+    ssh_args=(-p "$port")
+    if [ -n "$jumphost" ]; then
+      ssh_args+=(-J "$jumphost")
+      echo "Connecting to $selected ($dest) using $jumphost as jumphost"
+    else
+      echo "Connecting to $selected ($dest)..."
+    fi
+
+    "${ssh_cmd[@]}" "${ssh_args[@]}" "$dest"
+    ;;
+  __info)
+    # internal: called by the fzf preview, shows status + details.
+    # fzf passes the item as painted, so the name arrives with colour on it
+    name=$(printf '%s' "$2" | add_uncolour)
+    add_colors
+    info_host=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) | .host' "$HOSTS_FILE")
+
+    # the status is coloured by what it means, the details by the flag
+    if [ -n "$info_host" ] && command -v fping > /dev/null 2>&1; then
+      if fping -c1 -t 2000 "$info_host" > /dev/null 2>&1; then
+        printf '%s● online%s\n' "$ADD_C_OK" "$ADD_C_OFF"
+      else
+        printf '%s○ offline%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
+      fi
+      echo
+    fi
+
+    info=$(jq -r --arg name "$name" '.hosts[] | select(.name == $name) |
+    [ (.user // "-"), .host, (.port // "?"),
       (.jumphost | if . == null or . == "" then "-" else . end) ] | @tsv' "$HOSTS_FILE")
 
-  if [ -z "$info" ]; then
-    printf '%s(host not found)%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
-  else
-    IFS=$'\t' read -r i_user i_host i_port i_jump <<<"$info"
-    add_info_line "User:" "${i_user:--}" 0
-    add_info_line "Host:" "${i_host:--}" 1
-    add_info_line "Port:" "$i_port" 2
-    add_info_line "Jumphost:" "$i_jump" 3
-  fi
-  ;;
-*)
-  # printing help if given unknown option
-  echo -e "unknown option: $1\nrun sshmgr -h for available options"
-  ;;
+    if [ -z "$info" ]; then
+      printf '%s(host not found)%s\n' "$ADD_C_ERR" "$ADD_C_OFF"
+    else
+      IFS=$'\t' read -r i_user i_host i_port i_jump <<< "$info"
+      add_info_line "User:" "${i_user:--}" 0
+      add_info_line "Host:" "${i_host:--}" 1
+      add_info_line "Port:" "$i_port" 2
+      add_info_line "Jumphost:" "$i_jump" 3
+    fi
+    ;;
+  *)
+    # printing help if given unknown option
+    echo -e "unknown option: $1\nrun sshmgr -h for available options" >&2
+    exit 2
+    ;;
 esac

@@ -1,4 +1,4 @@
-.TH SSHMGR 1 "2026-09-30" "sshmgr 2.4.1" "User Commands"
+.TH SSHMGR 1 "2026-11-02" "sshmgr 2.4.3" "User Commands"
 .SH NAME
 sshmgr \- connect to ssh hosts from a menu
 .SH SYNOPSIS
@@ -286,6 +286,10 @@ Success, including quitting a menu or form without changing anything.
 .br
 The hosts file is not valid json, a host was not found, a port or name was
 rejected, or the file could not be written.
+.TP
+.B 2
+.br
+An unknown option or an invalid command-line argument was supplied.
 .SH EXAMPLES
 .TP
 .B sshmgr -a web-server example.com deploy 2222

@@ -2,7 +2,7 @@
 [![Description](https://readme-typing-svg.herokuapp.com?font=JetBrains+Mono&duration=3000&color=80B1CD&center=true&multiline=true&repeat=false&width=540&height=100&lines=A+simple+tool+writen+in+bash+to+make++;connecting+to+servers+much+easier+and+faster;(actively+working+on+it+btw))](https://git.io/typing-svg)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version: 2.4.1](https://img.shields.io/badge/version-2.4.1-blue.svg)](https://github.com/pyguy-programming/sshmgr)
+[![Version: 2.4.3](https://img.shields.io/badge/version-2.4.3-blue.svg)](https://github.com/pyguy-programming/sshmgr)
 
 A simple tool written in bash to make connecting to servers much easier and faster.
 
@@ -173,8 +173,9 @@ pointing to `sshmgr -h`.
 ## Configuration
 
 Stored at `~/.config/sshmgr/known_hosts.json` (created automatically on first
-run). The script validates it with `jq` on startup and exits with
-`invalid json` if it is malformed or missing the `hosts` key.
+run). The script validates its structure with `jq` on startup and exits with
+`invalid json` if it is malformed, missing the `hosts` array, contains invalid
+host entries, duplicate names, or an invalid port.
 
 ```json
 {
