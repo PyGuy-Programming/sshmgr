@@ -100,16 +100,16 @@ keep the entry from being written is shown on the spot:
 
 ```
   ╭─ sshmgr · new host ──────────────────────────────────────╮
-  │                                                          │
-  │ name      [ web-server                                   ] │
-  │ host      [ a host address is required                   ] │
-  │ user      [ optional                                     ] │
-  │ port      [ optional                                     ] │
-  │ jumphost  [ optional                                     ] │
-  │                                                          │
-  ├──────────────────────────────────────────────────────────╮
-  │ ! a host address is required                             │
-  ╰──────────────────────────────────────────────────────────╯
+  │                                                                 │
+  │ name      [ web-server                                   ]      │
+  │ host      [ a host address is required                   ]      │
+  │ user      [ optional                                     ]      │
+  │ port      [ optional                                     ]      │
+  │ jumphost  [ optional                                     ]      │
+  │                                                                 │
+  ├───────────────────────────────────────────────────────╮
+  │ ! a host address is required                                    │
+  ╰───────────────────────────────────────────────────────╯
 
   ⇥/⇧⇥ field   ← → move   ⌫ delete   ^U clear   ^S save   esc cancel
 ```
